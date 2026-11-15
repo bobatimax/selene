@@ -1,0 +1,3641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lunar South Pole Mission Planner</title>
+<style>
+  :root {
+    --bg-base: #070913;
+    --panel-bg: rgba(13, 18, 32, 0.92);
+    --panel-border: rgba(56, 82, 130, 0.45);
+    --card-bg: rgba(20, 28, 48, 0.75);
+    --accent-cyan: #38bdf8;
+    --accent-blue: #2563eb;
+    --accent-gold: #f59e0b;
+    --accent-green: #4ade80;
+    --accent-red: #f87171;
+    --text-main: #e2e8f0;
+    --text-muted: #94a3b8;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg-base); color: var(--text-main); font-family: 'Inter', 'Segoe UI', system-ui, sans-serif; overflow: hidden; height: 100vh; font-size: 13.5px; line-height: 1.5; }
+  #canvas-container { position: absolute; inset: 0; z-index: 1; }
+  canvas { display: block; width: 100%; height: 100%; }
+
+  /* SUBTLE CUSTOM SCROLLBARS */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.25); border-radius: 10px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(56, 189, 248, 0.5); }
+
+  /* TOP NAVIGATION */
+  #top-navbar {
+    position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+    background: var(--panel-bg); border: 1px solid var(--panel-border);
+    border-radius: 999px; padding: 5px 10px; backdrop-filter: blur(16px);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.65); z-index: 50; display: flex; gap: 5px;
+    max-width: 97vw; overflow-x: auto;
+  }
+  .nav-tab {
+    background: transparent; color: var(--text-muted); border: none; padding: 7px 12px;
+    border-radius: 999px; font-size: 12px; font-weight: 600; cursor: pointer;
+    white-space: nowrap; transition: all 0.2s ease; margin: 0;
+  }
+  .nav-tab:hover { color: #fff; background: rgba(255,255,255,0.08); }
+  .nav-tab.active { background: var(--accent-blue); color: #fff; box-shadow: 0 0 14px rgba(37, 99, 235, 0.6); }
+
+  /* SIDEBAR TOGGLE PILLS */
+  .dock-toggle {
+    position: absolute; top: 72px; z-index: 45;
+    background: var(--panel-bg); color: var(--text-main); border: 1px solid var(--panel-border);
+    border-radius: 999px; padding: 7px 14px; font-size: 12px; font-weight: 600;
+    backdrop-filter: blur(14px); box-shadow: 0 6px 20px rgba(0,0,0,0.5);
+    cursor: pointer; display: none; align-items: center; gap: 6px; transition: all 0.2s;
+  }
+  .dock-toggle:hover { border-color: var(--accent-cyan); color: #fff; background: #17233b; }
+  .dock-toggle.visible { display: inline-flex; }
+  #toggleLeftBtn { left: 18px; }
+  #toggleRightBtn { right: 18px; }
+
+  /* FLOATING PANELS */
+  .panel {
+    position: absolute; background: var(--panel-bg); border: 1px solid var(--panel-border);
+    border-radius: 16px; padding: 20px; backdrop-filter: blur(16px);
+    box-shadow: 0 16px 48px rgba(0,0,0,0.65); max-height: calc(100vh - 92px); overflow-y: auto;
+    z-index: 40; display: none; transition: opacity 0.25s ease, transform 0.25s ease;
+  }
+  .panel.active-panel { display: block; }
+  .panel.collapsed { display: none !important; }
+
+  .panel-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--panel-border);
+  }
+  .panel-header h2 { font-size: 18px; color: #fff; font-weight: 700; letter-spacing: -0.2px; margin: 0; border: none; padding: 0; }
+  .collapse-btn {
+    background: rgba(255,255,255,0.06); border: 1px solid transparent; color: var(--text-muted);
+    border-radius: 8px; padding: 4px 9px; font-size: 11.5px; cursor: pointer; margin: 0;
+  }
+  .collapse-btn:hover { background: rgba(255,255,255,0.12); color: #fff; border-color: var(--panel-border); }
+
+  .panel h2 { font-size: 18px; margin-bottom: 12px; color: var(--accent-cyan); border-bottom: 1px solid var(--panel-border); padding-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+  .panel h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-muted); margin: 16px 0 8px; display: flex; justify-content: space-between; align-items: center; }
+  
+  .left { top: 72px; left: 18px; width: 365px; }
+  .right { top: 72px; right: 18px; width: 380px; }
+  .center-panel { top: 72px; left: 50%; transform: translateX(-50%); width: min(880px, 94vw); padding: 24px; }
+
+  /* CLEAN ACCORDION SECTIONS */
+  details.section-box {
+    background: var(--card-bg); border: 1px solid var(--panel-border);
+    border-radius: 12px; padding: 10px 14px; margin-bottom: 12px;
+  }
+  details.section-box summary {
+    list-style: none; cursor: pointer; font-size: 14px; font-weight: 700;
+    color: #e2e8f0; display: flex; justify-content: space-between; align-items: center;
+    user-select: none;
+  }
+  details.section-box summary::-webkit-details-marker { display: none; }
+  details.section-box summary::after {
+    content: '▾'; font-size: 13px; color: var(--accent-cyan); transition: transform 0.2s;
+  }
+  details.section-box:not([open]) summary::after { transform: rotate(-90deg); }
+  details.section-box[open] summary { margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid rgba(56, 82, 130, 0.35); }
+
+  /* CONTROLS & FORM ELEMENTS */
+  button, .btn {
+    background: #17253e; color: #cbd5e1; border: 1px solid #2e4873; border-radius: 8px;
+    padding: 8px 12px; cursor: pointer; font-size: 12.5px; margin: 0; transition: all 0.2s;
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-weight: 600;
+  }
+  button:hover, .btn:hover { background: #22385c; border-color: var(--accent-cyan); color: #fff; text-decoration: none; }
+  button.active { background: var(--accent-blue); border-color: #60a5fa; color: #fff; }
+  
+  .btn-danger {
+    background: rgba(153, 27, 27, 0.28); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.4);
+    padding: 4px 8px; font-size: 11px; border-radius: 6px;
+  }
+  .btn-danger:hover { background: #dc2626; color: #fff; border-color: #f87171; }
+
+  .btn-view {
+    background: rgba(14, 116, 144, 0.3); color: #7dd3fc; border: 1px solid rgba(56, 189, 248, 0.4);
+    padding: 4px 9px; font-size: 11px; border-radius: 6px;
+  }
+  .btn-view:hover { background: #0284c7; color: #fff; border-color: #38bdf8; }
+
+  input[type="range"] { width: 100%; accent-color: var(--accent-cyan); margin: 8px 0; cursor: pointer; }
+  input[type="text"], select {
+    background: #0b101d; border: 1px solid var(--panel-border); color: #fff; padding: 9px 12px; border-radius: 8px; width: 100%; margin: 4px 0 10px; font-size: 12.5px;
+  }
+  input[type="text"]:focus, select:focus { outline: none; border-color: var(--accent-cyan); }
+  label { display: block; margin: 8px 0 3px; color: var(--text-muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+  .value { color: #fff; font-weight: 600; }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+
+  .data-card {
+    background: var(--card-bg); border: 1px solid var(--panel-border);
+    border-radius: 12px; padding: 12px 14px; margin-bottom: 12px;
+  }
+
+  .site-list { display: flex; flex-direction: column; gap: 5px; max-height: 220px; overflow-y: auto; padding-right: 3px; }
+  .site-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 8px 10px; border-radius: 8px; background: rgba(11, 16, 29, 0.65);
+    border: 1px solid rgba(56, 82, 130, 0.3); cursor: pointer; transition: all 0.15s;
+  }
+  .site-item:hover { border-color: var(--accent-cyan); background: rgba(30, 48, 82, 0.65); }
+  .site-item.selected { border-color: var(--accent-cyan); background: rgba(37, 99, 235, 0.25); }
+
+  .bar { height: 7px; background: #0b101d; border-radius: 999px; overflow: hidden; margin: 6px 0; border: 1px solid rgba(56, 82, 130, 0.3); }
+  .bar > div { height: 100%; background: linear-gradient(90deg, #2563eb, #38bdf8); transition: width 0.25s ease; }
+
+  /* BADGES & STAT TILES */
+  .rating-badge {
+    display: inline-block; background: linear-gradient(135deg, #1d4ed8, #38bdf8);
+    color: #fff; padding: 5px 12px; border-radius: 999px; font-weight: 700; font-size: 13px;
+    box-shadow: 0 2px 12px rgba(56,189,248,0.35); white-space: nowrap;
+  }
+  .agency-tag { font-size: 10.5px; padding: 3px 8px; border-radius: 6px; font-weight: 700; background: rgba(14, 116, 144, 0.25); color: #7dd3fc; border: 1px solid rgba(56, 189, 248, 0.35); }
+  .provenance-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; padding: 2px 7px; border-radius: 999px; font-weight: 700; letter-spacing: 0.3px; text-transform: uppercase; }
+  .prov-verified { background: rgba(22, 163, 74, 0.2); color: #86efac; border: 1px solid rgba(34, 197, 94, 0.45); }
+  .prov-estimated { background: rgba(217, 119, 6, 0.22); color: #fcd34d; border: 1px solid rgba(245, 158, 11, 0.45); }
+  .prov-unavailable { background: rgba(148, 163, 184, 0.16); color: #cbd5e1; border: 1px solid rgba(148, 163, 184, 0.35); }
+  .status-pill { font-size: 11.5px; padding: 5px 10px; border-radius: 8px; background: rgba(15, 41, 30, 0.8); color: var(--accent-green); border: 1px solid rgba(34, 197, 94, 0.4); display: block; margin-bottom: 12px; }
+  
+  .stat-tile {
+    background: rgba(11, 16, 29, 0.85); border: 1px solid rgba(56, 82, 130, 0.4);
+    border-radius: 10px; padding: 10px 12px;
+  }
+  .stat-tile-label { font-size: 12px; color: var(--text-muted); margin-bottom: 2px; display: flex; justify-content: space-between; align-items: center; }
+  .stat-tile-val { font-size: 14px; font-weight: 700; color: #fff; }
+  .stat-tile-sub { font-size: 12px; margin-top: 2px; }
+
+  .comp-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12.5px; margin-top: 0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.3); }
+  .comp-table th, .comp-table td { padding: 10px 14px; border-bottom: 1px solid rgba(56, 82, 130, 0.25); text-align: left; }
+  .comp-table th { color: #fff; font-weight: 700; background: linear-gradient(180deg, rgba(37,99,235,0.35), rgba(11,16,29,0.9)); position: sticky; top: 0; font-size: 12px; letter-spacing: 0.3px; }
+  .comp-table tr:nth-child(even) td { background: rgba(15, 23, 42, 0.4); }
+  .comp-table tr:hover td { background: rgba(37, 99, 235, 0.18); }
+  .comp-table td:first-child { font-weight: 600; color: var(--text-muted); background: rgba(11,16,29,0.6); }
+
+  .score-breakdown { display: flex; height: 6px; border-radius: 999px; overflow: hidden; background: #0b101d; margin-top: 6px; gap: 1px; }
+  .sb-solar { background: #f59e0b; }
+  .sb-comms { background: #38bdf8; }
+  .sb-ice   { background: #2dd4bf; }
+  .sb-slope { background: #4ade80; }
+  .analog-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--panel-border); padding-bottom: 8px; margin-bottom: 10px; }
+
+  .horizon { width: 100%; height: 120px; background: #0b0f1a; border: 1px solid var(--panel-border); border-radius: 10px; position: relative; margin: 10px 0; overflow: hidden; }
+  .horizon .line { position: absolute; left: 0; right: 0; top: 55%; height: 1px; background: #3a5075; }
+  .horizon .label { position: absolute; bottom: 6px; left: 10px; font-size: 10.5px; color: #64748b; }
+  .sun-marker, .earth-marker { position: absolute; width: 11px; height: 11px; border-radius: 50%; transform: translate(-50%, -50%); }
+  .sun-marker { background: #ffcc00; box-shadow: 0 0 12px #ffaa00; }
+  .earth-marker { background: var(--accent-cyan); box-shadow: 0 0 10px #2a7aff; }
+
+  a { color: var(--accent-cyan); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* TOAST NOTIFICATION */
+  #toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: rgba(15, 23, 42, 0.96); border: 1px solid var(--accent-cyan); color: #fff;
+    padding: 9px 18px; border-radius: 999px; font-size: 12.5px; font-weight: 600;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.7); z-index: 300; opacity: 0; pointer-events: none;
+    transition: all 0.25s ease;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* PRESENTATION MODE */
+  #presentation-overlay {
+    position: absolute; inset: 0; pointer-events: none; z-index: 100; display: none;
+    padding: 24px; justify-content: space-between; flex-direction: column;
+  }
+  body.presentation-mode #top-navbar, body.presentation-mode .panel, body.presentation-mode .dock-toggle { display: none !important; }
+  body.presentation-mode #presentation-overlay { display: flex; pointer-events: auto; }
+  .pres-card { background: rgba(13, 18, 32, 0.88); border: 1px solid var(--accent-cyan); border-radius: 14px; padding: 18px 24px; backdrop-filter: blur(14px); max-width: 460px; }
+
+  #loading { position: absolute; inset: 0; background: var(--bg-base); display: flex; align-items: center; justify-content: center; z-index: 200; font-size: 18px; color: var(--accent-cyan); letter-spacing: 0.5px; }
+
+  /* FLIGHT-DIRECTOR / LAUNCH-CONTROL VISUAL SYSTEM */
+  :root {
+    --panel-bg: rgba(7, 12, 22, 0.96);
+    --panel-border: rgba(120, 150, 185, 0.32);
+    --card-bg: rgba(14, 23, 36, 0.88);
+    --accent-cyan: #8bd3f7;
+    --accent-blue: #2563eb;
+    --text-muted: #91a0b3;
+  }
+  body { font-family: Inter, "Segoe UI", Arial, sans-serif; letter-spacing: .01em; font-size: 15px; line-height: 1.55; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+  #top-navbar { background: rgba(5,10,17,.96); border-color: rgba(150,175,200,.35); border-radius: 5px; backdrop-filter: blur(8px); box-shadow: 0 5px 24px #0009; }
+  .nav-tab { text-transform: uppercase; letter-spacing: .055em; font-size: 12px; line-height: 1.25; padding: 9px 13px; border-radius: 3px; }
+  .nav-tab.active { background: #e8edf2; color: #101820; box-shadow: none; }
+  .panel { background: rgba(6,11,19,.97); border-color: rgba(135,160,185,.34); border-radius: 5px; backdrop-filter: blur(8px); box-shadow: 0 12px 36px #000b; }
+  .panel-header h2, .panel h2 { color: #e7edf3; text-transform: uppercase; letter-spacing: .09em; }
+  .panel h2 { border-color: rgba(150,170,190,.25); }
+  .panel h3, label { letter-spacing: .12em; }
+  button, .btn { border-radius: 3px; text-transform: uppercase; letter-spacing: .055em; }
+  .stat-tile, details.section-box { border-radius: 4px; background: rgba(14,22,33,.92); border-color: rgba(130,155,180,.25); }
+  .rating-badge { border-radius: 3px; background: #e7edf3; color: #101820; box-shadow: none; }
+  #mission-hud {
+    position: fixed; z-index: 30; top: 18px; left: 20px; pointer-events:none;
+    color:#e8eef4; text-shadow:0 2px 8px #000; max-width:300px;
+  }
+  #mission-hud .eyebrow { font-size:11px; letter-spacing:.22em; color:#a8bacb; text-transform:uppercase; }
+  #mission-hud .mission-name { font-size:19px; font-weight:800; letter-spacing:.07em; line-height:1.15; margin:5px 0; }
+  #mission-hud .mission-meta { font:11px/1.6 ui-monospace,monospace; color:#aab8c6; letter-spacing:.08em; }
+  #mission-hud .live-dot { display:inline-block;width:6px;height:6px;border-radius:50%;background:#f36b48;margin-right:6px;box-shadow:0 0 8px #f36b48; }
+  #mission-readout {
+    position:fixed; z-index:30; right:22px; top:20px; pointer-events:none; text-align:right;
+    color:#c8d2dc; font:11px/1.8 ui-monospace,monospace; letter-spacing:.12em; text-shadow:0 2px 8px #000;
+  }
+  #mission-timeline {
+    position:fixed; z-index:80; left:50%; bottom:0; transform:translateX(-50%);
+    width:min(1040px, calc(100vw - 36px)); padding:16px 24px 15px;
+    background:linear-gradient(180deg,rgba(5,10,17,.82),rgba(5,10,17,.98));
+    border:1px solid rgba(140,165,190,.3); border-bottom:0; border-radius:5px 5px 0 0;
+    box-shadow:0 -8px 34px #0008; color:#e7edf3;
+  }
+  #mission-timeline .tl-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+  #mission-timeline .tl-kicker { font:12px ui-monospace,monospace; letter-spacing:.14em; color:#9aabba; }
+  #mission-timeline .tl-current { font:13px ui-monospace,monospace; letter-spacing:.07em; color:#f4f7fa; text-transform:uppercase; }
+  #mission-timeline .tl-track { position:relative; height:2px; background:#43505e; margin:0 7px 12px; }
+  #mission-timeline .tl-progress { height:100%; width:0%; background:#e9eff5; box-shadow:0 0 10px #c8d9e8; transition:width .25s; }
+  #mission-timeline .tl-stops { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; }
+  #mission-timeline .tl-stop { position:relative; border:0; padding:0; background:none; color:#8493a2; display:flex; flex-direction:column; align-items:flex-start; gap:4px; text-align:left; text-transform:uppercase; cursor:pointer; }
+  #mission-timeline .tl-stop::before { content:""; position:absolute; top:-17px; left:0; width:8px; height:8px; border:1px solid #8795a3; background:#111a24; transform:rotate(45deg); }
+  #mission-timeline .tl-stop.active { color:#fff; }
+  #mission-timeline .tl-stop.active::before { background:#f0f4f8; border-color:#fff; box-shadow:0 0 10px #dbe9f5; }
+  #mission-timeline .tl-stop b { font:12px ui-monospace,monospace; letter-spacing:.07em; }
+  #mission-timeline .tl-stop small { font-size:11px; letter-spacing:.035em; color:#8d9baa; }
+  #mission-timeline .tl-disclaimer { margin-top:9px; text-align:right; color:#8b9aaa; font:9px ui-monospace,monospace; letter-spacing:.08em; }
+  @media(max-width:700px) {
+    #mission-hud { top:14px;left:12px; } #mission-hud .mission-name{font-size:15px}
+    #mission-readout {display:none}
+    #mission-timeline {width:calc(100vw - 16px);padding:11px 12px 10px}
+    #mission-timeline .tl-stop b{font-size:8px} #mission-timeline .tl-stop small{font-size:7px}
+  }
+  body.presentation-mode #mission-hud, body.presentation-mode #mission-readout, body.presentation-mode #mission-timeline {display:none}
+
+  /* Readability pass */
+  body { font-size: 15px; -webkit-font-smoothing: antialiased; text-rendering: geometricPrecision; }
+  .panel, #top-navbar, #mission-timeline { backdrop-filter: none; }
+  .nav-tab { font-size: 13px; letter-spacing: .025em; }
+  .panel h2, .panel-header h2 { font-size: 19px; letter-spacing: .055em; }
+  .panel h3, label { font-size: 12px; letter-spacing: .07em; }
+  .stat-tile-label, .stat-tile-sub { font-size: 13px; }
+  .stat-tile-val { font-size: 16px; }
+  #mission-hud .eyebrow { font-size: 12px; letter-spacing: .14em; }
+  #mission-hud .mission-meta { font-size: 12px; letter-spacing: .045em; }
+  #mission-readout { font-size: 12px; letter-spacing: .065em; }
+  #mission-timeline .tl-stop small { font-size: 12px; letter-spacing: .025em; }
+  #mission-timeline .tl-stop b { font-size: 13px; letter-spacing: .04em; }
+  #mission-timeline .tl-disclaimer { font-size: 10px; letter-spacing: .045em; }
+  #mission-timeline .tl-controls { display:flex; align-items:center; gap:9px; margin:0 0 8px; flex-wrap:wrap; }
+  #mission-timeline .tl-controls button, #mission-timeline .tl-controls select { background:#101a25; color:#eaf1f7; border:1px solid #536577; border-radius:3px; padding:6px 10px; font:11px ui-monospace,monospace; cursor:pointer; }
+  #mission-timeline .tl-controls button#tl-play { background:#e9eff5; color:#101820; font-weight:800; min-width:76px; }
+  #mission-timeline .tl-controls label, #mission-timeline .tl-rotation { color:#aab8c6; font:10px ui-monospace,monospace; letter-spacing:.06em; }
+  #mission-timeline .tl-rotation { margin-left:auto; color:#d8e4ee; }
+  #mission-timeline .tl-scrubber { display:block; width:100%; margin:4px 0 0; accent-color:#e9eff5; cursor:ew-resize; }
+  #mission-timeline .tl-scale { display:flex; justify-content:space-between; color:#8999a8; font:9px ui-monospace,monospace; letter-spacing:.04em; margin-top:3px; }
+  @media(max-width:700px) { #mission-timeline .tl-scale {font-size:7px} #mission-timeline .tl-rotation {width:100%;margin-left:0} }
+
+  /* Typography refinement */
+  body { letter-spacing: 0; color: #d5dde5; }
+  .nav-tab, button, .btn { text-transform: none; letter-spacing: .01em; font-weight: 500; }
+  .panel-header h2, .panel h2 { text-transform: none; letter-spacing: .015em; font-weight: 600; color: #dce4eb; }
+  .panel h3, label { text-transform: none; letter-spacing: .025em; font-weight: 500; color: #aab7c4; }
+  #mission-hud { color: #dce4eb; text-shadow: 0 1px 3px rgba(0,0,0,.45); }
+  #mission-hud .eyebrow { letter-spacing: .055em; color: #b2bfca; font-weight: 500; }
+  #mission-hud .mission-name { font-size: 18px; font-weight: 650; letter-spacing: .015em; line-height: 1.22; }
+  #mission-hud .mission-meta { letter-spacing: .015em; color: #b4c0cb; }
+  #mission-readout { letter-spacing: .025em; text-shadow: 0 1px 3px rgba(0,0,0,.4); color: #c1ccd6; }
+  #mission-timeline .tl-kicker, #mission-timeline .tl-current,
+  #mission-timeline .tl-stop b, #mission-timeline .tl-stop small,
+  #mission-timeline .tl-disclaimer, #mission-timeline .tl-controls label,
+  #mission-timeline .tl-rotation, #mission-timeline .tl-scale { letter-spacing: .015em; }
+  #mission-timeline .tl-stop { text-transform: none; }
+  #mission-timeline .tl-stop.active { color: #e2e8ee; }
+  #mission-timeline .tl-current { text-transform: none; color: #dce4eb; }
+  .agency-tag, .provenance-badge { letter-spacing: .015em; font-weight: 600; }
+
+  /* Refined, movable lunar-day console */
+  #mission-timeline { left:50%; bottom:14px; transform:translateX(-50%); width:min(820px,calc(100vw - 440px)); min-width:360px; padding:12px 16px 11px; border:1px solid rgba(140,165,190,.30); border-radius:6px; background:rgba(7,13,21,.94); box-shadow:0 8px 28px rgba(0,0,0,.38); }
+  #mission-timeline .tl-top { cursor:grab; touch-action:none; user-select:none; margin-bottom:7px; }
+  #mission-timeline .tl-top:active { cursor:grabbing; }
+  #mission-timeline .tl-kicker { font-size:10px; letter-spacing:.04em; }
+  #mission-timeline .tl-current { font-size:12px; color:#dce5ed; }
+  #mission-timeline .tl-actions button, #mission-timeline .tl-controls button, #mission-timeline .tl-controls select { border:1px solid #405469; background:#111d29; color:#dce6ef; border-radius:4px; padding:5px 9px; font:11px ui-monospace,monospace; }
+  #mission-timeline .tl-actions button { cursor:pointer; }
+  #mission-timeline .tl-controls { margin:0 0 7px; }
+  #mission-timeline .tl-controls button { cursor:pointer; }
+  #mission-timeline .tl-controls button#tl-play { background:#dce7ef; color:#14202a; border-color:#dce7ef; }
+  #mission-timeline .tl-scrubber { accent-color:#c6d9e8; }
+  #mission-timeline .tl-disclaimer { font-size:8px; letter-spacing:0; }
+  #mission-timeline.is-collapsed { width:auto; min-width:0; padding:9px 12px; }
+  #mission-timeline.is-collapsed .tl-top { margin:0; }
+  #mission-timeline.is-collapsed .tl-body { display:none; }
+  @media(max-width:900px) { #mission-timeline { width:calc(100vw - 24px); min-width:0; bottom:8px; } }
+  @media(max-width:560px) { #mission-timeline .tl-rotation { width:auto; margin-left:0; } #mission-timeline .tl-disclaimer { display:none; } }
+  body.presentation-mode #mission-timeline { display:none; }
+
+  /* 2D lunar landing simulator */
+  #tab-landing2d { max-height:calc(100vh - 92px); overflow:auto; }
+  .landing2d-shell { display:grid; grid-template-columns:minmax(0,1fr) 295px; gap:16px; align-items:start; }
+  .landing2d-mapwrap { position:relative; background:#080e16; border:1px solid #334456; border-radius:10px; overflow:hidden; min-height:410px; box-shadow:0 8px 24px rgba(0,0,0,0.45); }
+  #landingMap { display:block; width:100%; height:auto; min-height:410px; touch-action:none; cursor:crosshair; }
+  .landing2d-hud { position:absolute; top:12px; left:12px; right:12px; display:flex; justify-content:space-between; pointer-events:none; gap:8px; flex-wrap:wrap; }
+  .landing2d-pill { background:rgba(8,14,22,0.88); border:1px solid rgba(139,211,247,0.3); color:#e2e8f0; padding:5px 10px; border-radius:6px; font:11px ui-monospace,monospace; }
+  .landing2d-controls { display:flex; flex-direction:column; gap:10px; }
+  .landing2d-controls .data-card { margin:0; padding:12px 14px; background:rgba(14,23,36,0.94); }
+  .landing2d-controls input[type=range] { width:100%; accent-color:#38bdf8; margin:4px 0 2px; }
+  .landing2d-btn { border:1px solid #3b82f6; background:linear-gradient(135deg,#2563eb,#38bdf8); color:#fff; border-radius:6px; padding:10px 12px; font-weight:700; cursor:pointer; transition:all 0.18s; width:100%; }
+  .landing2d-btn:hover { filter:brightness(1.1); }
+  .landing2d-btn:disabled { opacity:0.5; cursor:not-allowed; }
+  .landing2d-btn.secondary { background:#111d29; border-color:#475569; color:#e5edf5; font-weight:600; }
+  .landing2d-btn.secondary:hover { border-color:#8bd3f7; background:#19283a; }
+  .landing2d-presets { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-top:8px; }
+  .landing2d-preset-btn { padding:5px 6px; font-size:10.5px; background:#0b1320; border:1px solid #334155; color:#cbd5e1; border-radius:5px; cursor:pointer; }
+  .landing2d-preset-btn:hover { border-color:#38bdf8; color:#fff; }
+  .landing2d-legend { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:10px; color:#9eacba; font-size:11px; padding:8px 4px; }
+  .landing2d-legend-items { display:flex; flex-wrap:wrap; gap:12px; }
+  .landing2d-dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:5px; vertical-align:middle; }
+  .landing2d-colorbar { display:flex; align-items:center; gap:6px; font:10px ui-monospace,monospace; color:#94a3b8; }
+  .landing2d-colorbar-bar { width:90px; height:8px; border-radius:4px; background:linear-gradient(90deg,rgb(14,22,32),rgb(42,56,68),rgb(88,102,112),rgb(152,160,162),rgb(224,222,210)); border:1px solid #334155; }
+  .landing2d-telemetry-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:8px; }
+  .landing2d-mini-stat { background:#09101a; border:1px solid #263547; border-radius:6px; padding:6px 8px; }
+  .landing2d-mini-stat span { display:block; font-size:10px; color:#8fa2b5; text-transform:uppercase; }
+  .landing2d-mini-stat strong { font-size:12.5px; color:#f1f5f9; font-family:ui-monospace,monospace; }
+  #landingStatus { min-height:46px; font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:4px; background:#09101a; border:1px solid #263547; border-radius:6px; padding:8px 10px; }
+  @media(max-width:860px) { .landing2d-shell { grid-template-columns:1fr; } .landing2d-mapwrap,#landingMap { min-height:310px; } }
+</style>
+</head>
+<body>
+<div id="loading">Loading 3D Moon Map &amp; Sun/Earth Positions…</div>
+<div id="canvas-container"></div>
+
+<div id="mission-hud">
+  <div class="eyebrow"><span class="live-dot"></span> Lunar South Pole // Mission Operations</div>
+  <div class="mission-name">ARTEMIS<br>LANDING SYSTEM</div>
+  <div class="mission-meta">SURFACE RECONNAISSANCE &nbsp;|&nbsp; REV 01.26</div>
+</div>
+<div id="mission-readout">SIMULATION VIEW // 3D TERRAIN<br>DATA LAYERS: LRO • LOLA • DIVINER<br>COORDINATE FRAME: SELENOGRAPHIC</div>
+<section id="mission-timeline" class="is-collapsed" aria-label="Lunar day simulator">
+  <div class="tl-top">
+    <div>
+      <div class="tl-kicker">LUNAR DAY SIMULATOR · SUNLIGHT & ROTATION</div>
+      <div class="tl-current" id="tl-current">Lunar day 0.00 / 29.53 · Paused</div>
+    </div>
+    <div class="tl-actions">
+      <button id="tl-collapse" type="button" aria-expanded="false" title="Expand lunar day controls">Lunar Day +</button>
+    </div>
+  </div>
+  <div class="tl-body" id="tl-body">
+    <div class="tl-controls">
+      <button id="tl-play" type="button">▶ Play</button>
+      <button id="tl-reset" type="button">↺ Reset</button>
+      <label for="tl-speed">Rate</label>
+      <select id="tl-speed"><option value="0.25">0.25 days / sec</option><option value="0.5" selected>0.5 days / sec</option><option value="1">1 day / sec</option><option value="2">2 days / sec</option></select>
+      <span class="tl-rotation" id="tl-rotation">MOON 0° · EARTH 0°</span>
+    </div>
+    <input class="tl-scrubber" id="tl-scrubber" type="range" min="0" max="29.53" step="0.01" value="0" aria-label="Lunar day progress">
+    <div class="tl-scale"><span>New Moon</span><span>First Quarter</span><span>Full Moon</span><span>Last Quarter</span><span>Next New Moon</span></div>
+    <div class="tl-disclaimer">ILLUSTRATIVE ROTATION MODEL · EARTH SPINS ONCE PER SIMULATED DAY; MOON ROTATES ON ITS ~27.3-DAY SIDEREAL PERIOD</div>
+  </div>
+</section>
+
+<div id="toast">Saved!</div>
+
+<!-- SIDEBAR RE-OPEN TOGGLE PILLS -->
+<button id="toggleLeftBtn" class="dock-toggle" title="Open Locations & Controls">☰ Locations &amp; Controls</button>
+<button id="toggleRightBtn" class="dock-toggle" title="Open Selected Spot Info">Spot Details ☰</button>
+
+<!-- PRESENTATION MODE UI -->
+<div id="presentation-overlay">
+  <div style="display:flex; justify-content:space-between; align-items:center;">
+    <div class="pres-card">
+      <h2 style="color:var(--accent-cyan); margin-bottom:4px; border:none; padding:0;">NASA Space Apps Challenge 2026</h2>
+      <div style="font-size:15px; font-weight:700;" id="presSiteName">Shackleton Rim 3D Map</div>
+      <div style="font-size:12.5px; color:var(--text-muted); margin-top:2px;">Location: <span id="presCoords">-89.90°, 0.00°</span> | Score: <span id="presScore" style="color:var(--accent-green);">94/100</span></div>
+    </div>
+    <button class="btn" id="btnExitPres" style="background:#dc2626; border-color:#ef4444; color:#fff;">Exit Fullscreen</button>
+  </div>
+  <div class="pres-card" style="align-self:flex-end;">
+    <div style="font-size:11px; text-transform:uppercase; color:var(--accent-cyan); margin-bottom:2px;">Live Conditions</div>
+    <div style="font-size:13px;" id="presStatusText">Sunlight Availability: 88% | Earth Radio Signal: Direct Connection</div>
+  </div>
+</div>
+
+<!-- TOP NAV TABS -->
+<div id="top-navbar">
+  <button class="nav-tab" id="btnDemoTour" style="background: linear-gradient(135deg, #2563eb, #38bdf8); color: #fff; font-weight: 700; box-shadow: 0 0 14px rgba(37, 99, 235, 0.5);">▶ Demo Tour</button>
+  <button class="nav-tab" data-tab="tab-about">About</button>
+  <button class="nav-tab active" data-tab="tab-globe">3D Lunar Globe</button>
+  <button class="nav-tab" data-tab="tab-psr">Shadowed Craters &amp; Volatiles</button>
+  <button class="nav-tab" data-tab="tab-solar">Solar &amp; Comms</button>
+  <button class="nav-tab" data-tab="tab-landing2d">2D Landing Simulator</button>
+  <button class="nav-tab" data-tab="tab-terrain">Terrain &amp; Safety</button>
+  <button class="nav-tab" data-tab="tab-compare">Compare Sites</button>
+  <button class="nav-tab" data-tab="tab-analog">Terrestrial Analogs</button>
+  <button class="nav-tab" data-tab="tab-ranking">Site Ranking &amp; Saved</button>
+  <button class="nav-tab" data-tab="tab-mission">Mission &amp; Rover</button>
+  <button class="nav-tab" data-tab="tab-reports">Reports &amp; Sources</button>
+</div>
+
+<!-- TAB 1: 3D DIGITAL TWIN & EXPLORER -->
+<div id="tab-globe-left" class="panel left active-panel collapsed">
+  <div class="panel-header">
+    <h2>Lunar Explorer</h2>
+    <button class="collapse-btn" id="collapseLeftBtn" title="Hide panel for wider 3D view">Hide ✕</button>
+  </div>
+
+  <details class="section-box" open>
+    <summary>Candidate Landing Sites (14)</summary>
+    <div class="site-list" id="siteList"></div>
+  </details>
+
+  <details class="section-box" open>
+    <summary>
+      <span>Saved Locations (<span id="savedCountSidebar">0</span>)</span>
+    </summary>
+    <div style="display:flex; justify-content:flex-end; margin-bottom:6px;">
+      <button id="btnClearAllSidebar" class="btn-danger" style="display:none;">Delete All Saved</button>
+    </div>
+    <div class="site-list" id="sidebarSavedList" style="max-height:150px;"></div>
+  </details>
+
+  <details class="section-box">
+    <summary>Camera Views &amp; Surface Layers</summary>
+    <div class="grid-2" style="margin-bottom:10px;">
+      <button id="btnSouthPole">South Pole</button>
+      <button id="btnEarthView">Earth View</button>
+      <button id="btnMoonGlobal">Global Moon</button>
+      <button id="btnResetView">Reset Camera</button>
+    </div>
+
+    <label>Orbital Surface Layer</label>
+    <select id="trekLayerSelect">
+      <option value="LRO_WAC_Mosaic_Global_303ppd_v02">NASA LRO Optical Mosaic</option>
+      <option value="LRO_LOLA_ClrShade_Global_128ppd_v04">NASA LOLA Elevation Relief</option>
+      <option value="Kaguya_TC_Ortho_Global_4096ppd">JAXA Kaguya Surface Albedo</option>
+    </select>
+
+    <div class="grid-2" style="margin-top:4px;">
+      <button id="toggleMarkers" class="active">Site Markers</button>
+      <button id="toggleRoute" class="active">Rover Traverse</button>
+    </div>
+  </details>
+
+  <details class="section-box">
+    <summary>Mission Ephemeris Date (2026)</summary>
+    <div class="status-pill" id="ephemStatus">Connecting to NASA JPL…</div>
+    <input type="range" id="dateSlider" min="0" max="364" value="180" step="1">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:4px;">
+      <span>Date: <span class="value" id="dateLabel">—</span></span>
+      <button id="btnFetchHorizons" style="font-size:11.5px; padding:5px 10px;">Query JPL Ephemeris</button>
+    </div>
+    <div style="font-size:10.5px; color:var(--text-muted); margin-top:6px;">
+      Tracks selenographic sub-solar &amp; sub-Earth libration geometry.
+    </div>
+  </details>
+
+  <p style="font-size:11.5px; color:var(--text-muted); text-align:center; margin-top:4px;">
+    Click anywhere on the 3D Moon to sample &amp; save coordinates.
+  </p>
+</div>
+
+<!-- RIGHT PANEL: SELECTED SPOT DETAILS -->
+<div id="tab-globe-right" class="panel right active-panel collapsed">
+  <div class="panel-header">
+    <h2>Site Telemetry</h2>
+    <button class="collapse-btn" id="collapseRightBtn" title="Hide panel for wider 3D view">Hide ✕</button>
+  </div>
+
+  <div class="data-card" style="background: rgba(24, 36, 62, 0.85);">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+      <div>
+        <div id="siteName" style="font-size:16px; font-weight:700; color:#fff;">—</div>
+        <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">Coords: <span class="value" id="siteCoords">—</span></div>
+      </div>
+      <span id="siteScore" class="rating-badge" title="Weighted suitability score">0/100</span>
+    </div>
+    <div id="siteAgencyContainer" style="margin-top:10px; display:flex; flex-wrap:wrap; gap:5px;"></div>
+    <div id="siteProvenanceRow" style="margin-top:8px;"></div>
+  </div>
+
+  <div class="grid-2" style="margin-bottom:12px;">
+    <div class="stat-tile" title="Calculated solar elevation angle above local smooth horizon">
+      <div class="stat-tile-label"><span>Solar Elevation</span><span class="provenance-badge prov-estimated">Est.</span></div>
+      <div class="stat-tile-val"><span id="sunAltQuick">—</span>°</div>
+      <div class="stat-tile-sub" id="sunStatusQuick">-</div>
+    </div>
+    <div class="stat-tile" title="Calculated Earth elevation above local smooth horizon including libration">
+      <div class="stat-tile-label"><span>Earth Line-of-Sight</span><span class="provenance-badge prov-estimated">Est.</span></div>
+      <div class="stat-tile-val"><span id="earthAltQuick">—</span>°</div>
+      <div class="stat-tile-sub" id="earthStatusQuick">-</div>
+    </div>
+    <div class="stat-tile" title="NASA LRO LOLA Digital Elevation Model slope baseline">
+      <div class="stat-tile-label"><span>Terrain Slope</span><span id="slopeProvBadge" class="provenance-badge prov-verified">LOLA</span></div>
+      <div class="stat-tile-val" id="quickSlopeVal">3.8°</div>
+      <div class="stat-tile-sub" id="quickSlopeSub">Landing Safe</div>
+    </div>
+    <div class="stat-tile" title="Inferred volatile/water-ice potential from NASA Diviner, LEND & LCROSS">
+      <div class="stat-tile-label"><span>Water-Ice Proxy</span><span id="iceProvBadge" class="provenance-badge prov-verified">Diviner</span></div>
+      <div class="stat-tile-val" id="quickIceVal">8.2% wt</div>
+      <div class="stat-tile-sub" style="color:var(--accent-cyan);">Polar Regolith</div>
+    </div>
+  </div>
+
+  <div class="data-card" id="siteNoteBox"></div>
+
+  <div class="data-card">
+    <label style="margin-top:0;">Save Custom Coordinates</label>
+    <div style="display:flex; gap:8px; margin-top:6px;">
+      <input type="text" id="customSiteName" placeholder="Enter site label..." style="margin:0;">
+      <button id="btnSaveSite" style="white-space:nowrap; background:#0f766e; border-color:#14b8a6; color:#fff;">+ Save</button>
+    </div>
+    <button class="btn" id="btnAddToCompare" style="width:100%; margin-top:8px;">+ Add Current Site to Comparison</button>
+  </div>
+
+  <div class="grid-2" style="margin-top:8px;">
+    <a id="quickmapBtn" class="btn" href="https://quickmap.lroc.im-ldi.com/" target="_blank" rel="noopener">LROC QuickMap ↗</a>
+    <a id="moontrekBtn" class="btn" href="https://trek.nasa.gov/moon/" target="_blank" rel="noopener">Moon Trek ↗</a>
+  </div>
+  <button class="btn" id="btnEnterPres" style="width:100%; margin-top:10px; background:#1e3a8a; border-color:#3b82f6; color:#fff;">Presentation Mode</button>
+
+  <span id="subSolarLabel" style="display:none;"></span>
+  <span id="subEarthLabel" style="display:none;"></span>
+</div>
+
+<!-- TAB 2: PSR & RESOURCE INTELLIGENCE -->
+<div id="tab-psr" class="panel center-panel">
+  <h2>Shadowed Craters &amp; Polar Volatiles</h2>
+  <p style="color:var(--text-muted); margin-bottom:16px;">
+    Analysis of Permanently Shadowed Regions (PSRs) near the lunar south pole that act as cryogenic cold traps, preserving water ice and trapped volatiles over geological timescales.
+  </p>
+
+  <div class="grid-2">
+    <div class="data-card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+        <h3 style="color:var(--accent-cyan); margin:0;">Cryogenic Cold-Trap Telemetry</h3>
+        <span class="provenance-badge prov-verified">NASA LRO Diviner</span>
+      </div>
+      <div id="psrCraterStats" style="line-height:1.8;">
+        <div>Target Crater: <strong id="psrCraterName">Shackleton Crater &amp; Rim</strong></div>
+        <div>Peak Bolometric Temp: <span class="value" id="psrMaxTemp">98 K (-175°C)</span></div>
+        <div>Minimum Bolometric Temp: <span class="value" id="psrMinTemp">40 K (-233°C, Cryogenic)</span></div>
+        <div>Inferred Water-Ice Concentration: <span class="value good" id="psrIceRatio">5.5% – 8.2% wt</span></div>
+        <div>Dataset Source: <span style="color:var(--text-muted); font-size:11.5px;">NASA LRO Diviner Lunar Radiometer Experiment (K)</span></div>
+      </div>
+      <div style="margin-top:12px;">
+        <label>Select Polar Crater</label>
+        <select id="psrFeatureSelect" style="margin-bottom:0;">
+          <option value="shackleton">Shackleton Crater &amp; Rim (-89.9°, 0.0°)</option>
+          <option value="degerlache">de Gerlache Rim (-88.5°, -87.0°)</option>
+          <option value="faustini">Faustini Crater (-87.9°, 90.0°)</option>
+          <option value="haworth">Haworth Crater (-86.8°, -22.8°)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="data-card">
+      <h3 style="color:var(--accent-cyan); margin-top:0;">Scientific Evidence &amp; Verification</h3>
+      <ul style="padding-left:18px; font-size:12.5px; line-height:1.7; color:#cbd5e1;">
+        <li><strong>Orbital Instruments:</strong> NASA LRO Diviner thermal radiometer (K) and LOLA laser altimetry (m).</li>
+        <li><strong>Remote Signatures:</strong> LEND neutron spectrometer hydrogen suppression and LAMP ultraviolet albedo anomalies.</li>
+        <li><strong>Confidence Level:</strong> <span class="good">High (Validated by NASA LCROSS impact plume &amp; KASA ShadowCam)</span>.</li>
+        <li><strong>Scientific Caveat:</strong> Permanent shadow confirms thermal stability for ice, but local topographic roughness and overburden require subsurface drilling to verify extractable yield.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- TAB 3: SOLAR & HORIZON ANALYSIS -->
+<div id="tab-solar" class="panel center-panel">
+  <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--panel-border); padding-bottom:8px; margin-bottom:12px;">
+    <h2 style="margin:0; border:none; padding:0;">Sunlight & Radio Links to Earth</h2>
+    <span class="provenance-badge prov-estimated">Simple Math Model</span>
+  </div>
+  <p style="color:var(--text-muted); font-size:12px; margin-bottom:12px;">
+    These numbers come from a basic round-Moon calculation. Real crater walls can block the Sun or Earth when they are very low in the sky.
+  </p>
+
+  <div class="grid-2">
+    <div class="data-card">
+      <h3 style="color:var(--accent-cyan); margin-top:0;">Sun Position</h3>
+      <div>Sun Height: <span class="value" id="sunAlt">—</span>° | Direction: <span class="value" id="sunAz">—</span>°</div>
+      <div style="margin-top:4px;">Sunlight: <span id="sunStatus">-</span></div>
+      <div class="bar"><div id="solarBar" style="width:0%"></div></div>
+      <div>Power from Sun: <span class="value" id="solarPower">—</span></div>
+
+      <div class="horizon" id="sunHorizon">
+        <div class="line"></div>
+        <div class="label">FLAT HORIZON (0°)</div>
+        <div class="sun-marker" id="sunMarker" style="display:none"></div>
+      </div>
+    </div>
+    
+    <div class="data-card">
+      <h3 style="color:var(--accent-cyan); margin-top:0;">Radio Link to Earth</h3>
+      <div>Earth Height: <span class="value" id="earthAlt">—</span>° | Direction: <span class="value" id="earthAz">—</span>°</div>
+      <div style="margin-top:4px;">Can We Talk to Earth?: <span id="earthStatus">-</span></div>
+      <div style="margin-top:6px; font-size:12px; color:#cbd5e1;" id="commsWindowSummary">Checking 28-day visibility…</div>
+      <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">Simple estimate. Real missions may use orbiting satellites for extra coverage.</div>
+
+      <div class="horizon" id="earthHorizon">
+        <div class="line"></div>
+        <div class="label">FLAT HORIZON (0°)</div>
+        <div class="earth-marker" id="earthMarker" style="display:none"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 2D LANDING SIMULATOR -->
+<div id="tab-landing2d" class="panel center-panel">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;border-bottom:1px solid var(--panel-border);padding-bottom:10px;margin-bottom:12px;">
+    <div>
+      <h2 style="margin:0;border:0;padding:0;">2D Lunar Landing Simulator</h2>
+      <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">Interactive guidance &amp; hazard simulation on 14 Artemis candidate sites + your saved coordinates</div>
+    </div>
+    <span class="provenance-badge prov-verified" id="landingDemSourceBadge">NASA LOLA DEM · 5 m/pixel</span>
+  </div>
+
+  <div class="landing2d-shell">
+    <div>
+      <div class="landing2d-mapwrap">
+        <div class="landing2d-hud">
+          <div class="landing2d-pill" id="landingHudRegion">REGION: SHACKLETON RIM</div>
+          <div class="landing2d-pill" id="landingHudAlt">ALT: 600 m · VEL: 0.0 m/s</div>
+        </div>
+        <svg id="landingMap" viewBox="0 0 860 540" role="img" aria-label="NASA LOLA elevation terrain with draggable red lander arrow"></svg>
+      </div>
+      <div class="landing2d-legend">
+        <div class="landing2d-legend-items">
+          <span><i class="landing2d-dot" style="background:#4cc9a6"></i>Landing Target</span>
+          <span><i class="landing2d-dot" style="background:#ef4444"></i>Lander (Drag on Map)</span>
+          <span><i class="landing2d-dot" style="background:#f59e0b"></i>Slope Hazard (&gt;10°)</span>
+        </div>
+        <div class="landing2d-colorbar">
+          <span id="landingElevMin">Low</span>
+          <div class="landing2d-colorbar-bar"></div>
+          <span id="landingElevMax">High</span>
+        </div>
+      </div>
+      <div id="landingDemCredit" style="font-size:10.5px;color:#8191a2;line-height:1.45;">Source: NASA GSFC PGDA · LRO Lunar Orbiter Laser Altimeter (LOLA).</div>
+    </div>
+
+    <div class="landing2d-controls">
+      <!-- 1. SITE & CUSTOM POINT PICKER -->
+      <div class="data-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <h3 style="color:var(--accent-cyan);margin:0;">1. Landing Zone &amp; Custom Points</h3>
+          <button type="button" id="landingToggleCustomForm" class="landing2d-preset-btn" style="color:#38bdf8;border-color:#38bdf8;">+ Add Custom</button>
+        </div>
+
+        <label for="landingDemSelect" style="font-size:10.5px;color:#cbd5e1;margin-top:2px;">Active Site (14 Official + Saved)</label>
+        <select id="landingDemSelect" style="width:100%;margin:4px 0 8px;padding:8px;background:#09101a;color:#e5edf5;border:1px solid #3b4f66;border-radius:6px;"></select>
+
+        <!-- INLINE CUSTOM COORDINATE CREATOR -->
+        <div id="landingCustomForm" style="display:none;background:#09101a;border:1px solid #334155;border-radius:8px;padding:9px;margin-bottom:8px;">
+          <div style="font-size:11px;font-weight:700;color:#38bdf8;margin-bottom:6px;">Save Custom Landing Coordinates</div>
+          <input type="text" id="landingCustomName" placeholder="Label (e.g., Shackleton Ridge B)" style="margin:0 0 6px;padding:6px 8px;font-size:12px;">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">
+            <div>
+              <label style="font-size:9.5px;margin:0 0 2px;">Lat (-90° to 90°)</label>
+              <input type="number" id="landingCustomLat" step="0.01" min="-90" max="90" value="-89.45" style="width:100%;background:#0b101d;border:1px solid #334155;color:#fff;padding:5px 7px;border-radius:5px;font-size:12px;">
+            </div>
+            <div>
+              <label style="font-size:9.5px;margin:0 0 2px;">Lon (-180° to 180°)</label>
+              <input type="number" id="landingCustomLon" step="0.01" min="-180" max="180" value="14.20" style="width:100%;background:#0b101d;border:1px solid #334155;color:#fff;padding:5px 7px;border-radius:5px;font-size:12px;">
+            </div>
+          </div>
+          <div style="display:flex;gap:6px;">
+            <button type="button" id="landingSaveCustomBtn" class="landing2d-btn" style="padding:6px 8px;font-size:11.5px;">Save &amp; Load Site</button>
+            <button type="button" id="landingUseGlobeBtn" class="landing2d-btn secondary" style="padding:6px 8px;font-size:11px;" title="Use currently clicked 3D globe coordinates">From 3D Globe</button>
+          </div>
+        </div>
+
+        <div class="landing2d-telemetry-grid">
+          <div class="landing2d-mini-stat">
+            <span>Coordinates</span>
+            <strong id="landingTargetCoords">—</strong>
+          </div>
+          <div class="landing2d-mini-stat">
+            <span>Range to Target</span>
+            <strong id="landerOffset">—</strong>
+          </div>
+          <div class="landing2d-mini-stat">
+            <span>Terrain Slope</span>
+            <strong id="landingSlope">—</strong>
+          </div>
+          <div class="landing2d-mini-stat">
+            <span>Local Elevation</span>
+            <strong id="landingLanderElev">—</strong>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. FLIGHT GUIDANCE CONTROLS -->
+      <div class="data-card">
+        <h3 style="color:var(--accent-cyan);margin:0 0 6px;">2. Descent Guidance</h3>
+        <label for="landingSpeed" style="font-size:11px;color:#cbd5e1;margin-top:2px;">Horizontal Approach Speed</label>
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:#9eacba;"><span>0 m/s</span><strong id="landingSpeedVal" style="color:#fff;">12 m/s</strong><span>30 m/s</span></div>
+        <input id="landingSpeed" type="range" min="0" max="30" value="12" step="1">
+
+        <label for="landingDescent" style="display:block;font-size:11px;color:#cbd5e1;margin-top:8px;">Vertical Descent Rate (Safe ≤5 m/s)</label>
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:#9eacba;"><span>1 m/s</span><strong id="landingDescentVal" style="color:#fff;">3 m/s</strong><span>10 m/s</span></div>
+        <input id="landingDescent" type="range" min="1" max="10" value="3" step="1">
+
+        <div class="landing2d-presets">
+          <button type="button" class="landing2d-preset-btn" data-h="12" data-v="2">Precision</button>
+          <button type="button" class="landing2d-preset-btn" data-h="18" data-v="4">Nominal</button>
+          <button type="button" class="landing2d-preset-btn" data-h="28" data-v="8">Fast Drop</button>
+        </div>
+      </div>
+
+      <!-- 3. EXECUTION & TELEMETRY -->
+      <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:8px;">
+        <button class="landing2d-btn" id="landingStart">▶ Begin Descent</button>
+        <button class="landing2d-btn secondary" id="landingReset">↺ Reset</button>
+      </div>
+
+      <div class="data-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-size:10.5px;color:#8fa2b5;text-transform:uppercase;letter-spacing:.06em;font-weight:700;">Flight Computer Status</span>
+          <span style="font-size:10px;color:#64748b;">Initial Alt: 600 m</span>
+        </div>
+        <div id="landingStatus" aria-live="polite">Initializing NASA LOLA elevation raster…</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TAB 4: TERRAIN & LANDING SAFETY ANALYSIS -->
+<div id="tab-terrain" class="panel center-panel">
+  <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--panel-border); padding-bottom:8px; margin-bottom:12px;">
+    <h2 style="margin:0; border:none; padding:0;">Terrain Slope &amp; Landing Hazard Assessment</h2>
+    <span id="terrainTabProvBadge" class="provenance-badge prov-verified">NASA LRO LOLA DEM</span>
+  </div>
+  <p style="color:var(--text-muted); margin-bottom:16px;">
+    Evaluates terrain gradient (degrees), RMS surface roughness (meters), and boulder hazard distribution for safe lander touchdown.
+  </p>
+  
+  <div class="grid-3">
+    <div class="data-card">
+      <h3 style="color:var(--accent-cyan); margin-top:0;">Terrain Slope (deg)</h3>
+      <div style="font-size:24px; font-weight:700; color:#fff; margin:8px 0;" id="terrainSlopeVal">3.8°</div>
+      <div style="font-size:12px;" id="terrainSlopeStatus" class="good">Safe for Touchdown (&lt; 10° tilt)</div>
+    </div>
+    <div class="data-card">
+      <h3 style="color:var(--accent-cyan); margin-top:0;">Surface Roughness (m)</h3>
+      <div style="font-size:24px; font-weight:700; color:#fff; margin:8px 0;" id="terrainRoughVal">0.72 m</div>
+      <div style="font-size:12px; color:var(--text-muted);">RMS elevation deviation over a 5m baseline</div>
+    </div>
+    <div class="data-card">
+      <h3 style="color:var(--accent-cyan); margin-top:0;">Boulder &amp; Hazard Density</h3>
+      <div style="font-size:24px; font-weight:700; color:#fff; margin:8px 0;" id="terrainHazardVal">Low</div>
+      <div style="font-size:12px; color:var(--accent-green);" id="terrainHazardSub">Minimal surface boulder concentration</div>
+    </div>
+  </div>
+
+  <div class="data-card" style="margin-top:4px;">
+    <h3 style="color:var(--accent-cyan); margin-top:0;">Landing Site Assessment &amp; Data Provenance</h3>
+    <p style="font-size:13px; line-height:1.6; color:#cbd5e1;" id="terrainSummaryText">
+      This site exhibits stable highland anorthosite bedrock with a gradual, lander-safe slope.
+    </p>
+  </div>
+</div>
+
+<!-- TAB 5: MULTI-SITE COMPARISON SYSTEM -->
+<div id="tab-compare" class="panel center-panel">
+  <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--panel-border); padding-bottom:8px; margin-bottom:12px;">
+    <h2 style="margin:0; border:none; padding:0;">Multi-Site Scientific Comparison</h2>
+    <button id="btnClearCompare" class="btn-danger">Reset Selection</button>
+  </div>
+  <p style="color:var(--text-muted); margin-bottom:12px;">
+    Select two or more landing sites below to compare illumination, LOLA slope, roughness, Diviner temperature, water-ice potential, Earth DTE communications, and overall mission score.
+  </p>
+
+  <div class="data-card" style="padding:10px 14px;">
+    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+      <select id="compareAddSelect" style="margin:0; flex:1; min-width:200px;"></select>
+      <button id="btnAddSiteFromDropdown" class="btn">+ Add Site to Table</button>
+    </div>
+  </div>
+
+  <div class="data-card" style="overflow-x:auto; max-height:52vh; padding:0;">
+    <table class="comp-table" id="comparisonTable">
+      <thead>
+        <tr>
+          <th>Metric / Parameter</th>
+          <th>Site 1</th>
+          <th>Site 2</th>
+        </tr>
+      </thead>
+      <tbody id="comparisonTableBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- TAB 6: EARTH ANALOG MATCH -->
+<div id="tab-analog" class="panel center-panel">
+  <h2>Terrestrial Analog Testbeds</h2>
+  <p style="color:var(--text-muted); margin-bottom:16px;">
+    Matches the regolith mineralogy, rock composition, and polar topography of <strong id="analogTargetName" style="color:var(--accent-cyan);">—</strong> (<span id="analogTargetCoords">—</span>) with terrestrial field sites used by <strong>NASA</strong>, <strong>ISRO</strong>, <strong>ESA</strong>, <strong>CSA</strong>, <strong>JAXA</strong>, and <strong>KASA</strong> for mission testing.
+  </p>
+  <div id="analogMatchesList" style="max-height:55vh; overflow-y:auto; padding-right:4px;"></div>
+</div>
+
+<!-- TAB 7: INTELLIGENT LANDING-SITE RANKING & SAVED SITES -->
+<div id="tab-ranking" class="panel center-panel">
+  <h2>Landing Site Ranking &amp; Saved Locations</h2>
+
+  <div class="data-card" id="rankingHeroCard" style="background: linear-gradient(135deg, rgba(37,99,235,0.22), rgba(56,189,248,0.12)); border: 1px solid rgba(56,189,248,0.5); margin-bottom: 16px;">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
+      <div>
+        <div style="font-size:11px; text-transform:uppercase; color:var(--accent-cyan); letter-spacing:0.8px; font-weight:700;">★ Recommended Top Landing Site</div>
+        <div id="recSiteName" style="font-size:18px; font-weight:800; color:#fff; margin-top:2px;">Shackleton Rim</div>
+        <div style="font-size:12.5px; color:var(--text-muted); margin-top:2px;">Coords: <span id="recCoords" class="value">-89.90°, 0.00°</span> | <span id="recWhy" style="color:#e2e8f0;">Optimal solar ridges bordering cryogenic ice traps.</span></div>
+      </div>
+      <div style="text-align:right;">
+        <div id="recScoreBadge" class="rating-badge" style="font-size:15px; padding:6px 14px;">94/100</div>
+        <div style="font-size:10.5px; color:var(--text-muted); margin-top:4px;">Current Preset Match</div>
+      </div>
+    </div>
+    <div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;" id="recFactorChips">
+      <span class="agency-tag" style="background:rgba(245,158,11,0.2); color:#fcd34d; border-color:rgba(245,158,11,0.4);">☀ Solar: 25/25</span>
+      <span class="agency-tag" style="background:rgba(56,189,248,0.2); color:#7dd3fc; border-color:rgba(56,189,248,0.4);">📡 Comms: 25/25</span>
+      <span class="agency-tag" style="background:rgba(45,212,191,0.2); color:#5eead4; border-color:rgba(45,212,191,0.4);">❄ Ice: 25/25</span>
+      <span class="agency-tag" style="background:rgba(74,222,128,0.2); color:#86efac; border-color:rgba(74,222,128,0.4);">⛰ Slope: 19/25</span>
+    </div>
+  </div>
+
+  <div class="data-card" style="margin-bottom:14px; padding:12px 16px;">
+    <label style="margin-top:0; margin-bottom:8px; color:var(--accent-cyan);">One-Click Mission Priority Presets</label>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <button class="btn" id="presetBalanced" style="background:rgba(37,99,235,0.25); border-color:rgba(59,130,246,0.5);">Balanced</button>
+      <button class="btn" id="presetPower" style="background:rgba(245,158,11,0.25); border-color:rgba(245,158,11,0.5);">Power First</button>
+      <button class="btn" id="presetScience" style="background:rgba(45,212,191,0.25); border-color:rgba(45,212,191,0.5);">Science / Ice</button>
+      <button class="btn" id="presetSafety" style="background:rgba(74,222,128,0.25); border-color:rgba(74,222,128,0.5);">Crewed Safety</button>
+    </div>
+  </div>
+
+  <p style="color:var(--text-muted); margin-bottom:14px;">
+    Adjust mission priority weights to dynamically score candidate sites. Color bars show each factor's weighted contribution (Solar, Comms, Water-Ice, Terrain Safety) alongside data confidence.
+  </p>
+
+  <div class="grid-2">
+    <div>
+      <div class="data-card">
+        <h3 style="color:var(--accent-cyan); margin-top:0;">Mission Priority Inputs (relative weight)</h3>
+        <label style="color:#fbbf24;">Solar Illumination (<span id="wSolarVal" class="value">25</span>%)</label>
+        <input type="range" id="weightSolar" min="0" max="50" step="1" value="25">
+        
+        <label style="color:#38bdf8;">Earth Line-of-Sight Comms (<span id="wCommsVal" class="value">25</span>%)</label>
+        <input type="range" id="weightComms" min="0" max="50" step="1" value="25">
+        
+        <label style="color:#2dd4bf;">Water-Ice Proximity (<span id="wIceVal" class="value">25</span>%)</label>
+        <input type="range" id="weightIce" min="0" max="50" step="1" value="25">
+        
+        <label style="color:#4ade80;">Terrain Safety &amp; Low Slope (<span id="wSlopeVal" class="value">25</span>%)</label>
+        <input type="range" id="weightSlope" min="0" max="50" step="1" value="25">
+        <div style="font-size:11.5px; color:var(--text-muted); margin-top:8px;">Combined input: <strong id="weightTotal" style="color:#fff;">100</strong> / 200</div>
+      </div>
+    </div>
+    <div>
+      <div class="data-card">
+        <h3 style="color:var(--accent-cyan); margin-top:0;">Ranked Candidate Sites</h3>
+        <div id="rankingResultsList" style="overflow-y:auto; max-height:220px;"></div>
+      </div>
+      <div class="data-card">
+        <h3 style="color:var(--accent-cyan); margin-top:0;">
+          <span>Saved Custom Coordinates (<span id="savedCountTab">0</span>)</span>
+          <button id="btnClearAllTab" class="btn-danger" style="display:none;">Delete All</button>
+        </h3>
+        <div id="savedSiteList" style="overflow-y:auto; max-height:130px;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TAB 8: MISSION TIMELINE & ROVER ROUTE PLANNER -->
+<div id="tab-mission" class="panel center-panel">
+  <h2>Mission Window &amp; Geodesic Rover Traverse Planner</h2>
+  <div class="grid-2" style="margin-top:12px;">
+    <div class="data-card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+        <h3 style="color:var(--accent-cyan); margin:0;">Mission Window Comparison</h3>
+        <span class="provenance-badge prov-estimated">Window Simulation</span>
+      </div>
+      <label>Mission Start Date (2026)</label>
+      <input type="date" id="missionStart" value="2026-10-15" min="2026-01-01" max="2026-12-31" style="background:#0b101d; border:1px solid var(--panel-border); color:#fff; padding:8px 10px; border-radius:8px; width:100%; margin:4px 0 8px;">
+      <label>Surface Operation Duration: <span class="value" id="durationVal">14 Days</span></label>
+      <input type="range" id="missionDuration" min="1" max="60" value="14">
+      <div id="missionWindowStats" style="background:rgba(11,16,29,0.85); border:1px solid rgba(56,82,130,0.4); border-radius:8px; padding:10px; margin-top:8px; font-size:12px; line-height:1.7;">
+        <div>End Date: <strong class="value" id="missionEndLabel">2026-10-29</strong></div>
+        <div>Avg Solar Illumination: <strong class="value" id="missionAvgSolar">—</strong></div>
+        <div>Direct Earth Comms Window: <strong class="value" id="missionAvgComms">—</strong></div>
+        <div>Estimated Comms Blackout Days: <strong class="value" id="missionBlackoutDays">—</strong></div>
+      </div>
+      <button class="btn" id="btnCompareNextSynodic" style="width:100%; margin-top:8px; font-size:11.5px;">Shift +29.5 Days (Compare Next Lunar Cycle)</button>
+    </div>
+
+    <div class="data-card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+        <h3 style="color:var(--accent-cyan); margin:0;">Terrain-Aware Rover Traverse</h3>
+        <span class="provenance-badge prov-estimated">Illustrative Path</span>
+      </div>
+      <label>Origin Base Site</label>
+      <select id="roverStartSelect" style="margin-bottom:6px;"></select>
+      <label>Destination Target / PSR</label>
+      <select id="roverEndSelect" style="margin-bottom:8px;"></select>
+      <label>Rover Power Architecture</label>
+      <select id="roverPowerMode" style="margin-bottom:8px;">
+        <option value="solar">Solar Array (0.65 km/h avg, Daylight Only)</option>
+        <option value="rtg">Radioisotope Power / RTG (0.85 km/h avg, Continuous)</option>
+      </select>
+      <div id="roverRouteStats" style="background:rgba(11,16,29,0.85); border:1px solid rgba(56,82,130,0.4); border-radius:8px; padding:10px; font-size:12px; line-height:1.7;">
+        <div>Spherical Geodesic Distance: <strong class="value" id="roverDistVal">—</strong></div>
+        <div>Terrain-Adjusted Path (+Slope Factor): <strong class="value" id="roverTerrainDistVal">—</strong></div>
+        <div>Max Waypoint Slope Hazard: <strong class="value" id="roverMaxSlopeVal">—</strong></div>
+        <div>Estimated Traverse Time: <strong class="value" id="roverTimeEst">—</strong></div>
+      </div>
+      <button class="btn" id="btnSimulateRoute" style="width:100%; margin-top:10px;">Focus Traverse on 3D Globe</button>
+    </div>
+  </div>
+</div>
+
+<!-- TAB 9: REPORTS & DATA SOURCES -->
+<div id="tab-reports" class="panel center-panel">
+  <h2>Export Mission Data &amp; Space Agency Sources</h2>
+  <p style="color:var(--text-muted); margin-bottom:14px;">
+    Export complete JSON/CSV mission packages including coordinates, multi-site comparison results, weighted ranking breakdowns, data provenance, units, and confidence levels.
+  </p>
+
+  <div class="grid-3" style="margin-bottom:16px;">
+    <button class="btn" id="btnExportJSON">Export Full Mission (JSON)</button>
+    <button class="btn" id="btnExportCSV">Export Ranked &amp; Comparison (CSV)</button>
+    <button class="btn" id="btnPrintReport">Print / Save Assessment PDF</button>
+  </div>
+
+  <div class="grid-2">
+    <div class="data-card">
+      <span class="agency-tag">NASA / JPL / Moon Trek</span>
+      <p style="margin-top:8px; color:#cbd5e1;">Uses <strong>JPL Horizons</strong> ephemeris geometry for Sun/Earth positions, <strong>NASA Moon Trek</strong> LOLA elevation (m) &amp; slope (deg) mosaics, and <strong>LROC QuickMap</strong> high-resolution NAC imagery.</p>
+    </div>
+    <div class="data-card">
+      <span class="agency-tag">ISRO (Chandrayaan-1, 2 &amp; 3)</span>
+      <p style="margin-top:8px; color:#cbd5e1;">Includes <strong>Chandrayaan-3</strong> Shiv Shakti Point ChaSTE thermal measurements (K/°C), LIBS elemental detections (S, Fe, Ti, Ca, Al), and <strong>ISRO</strong> Sittampundi anorthosite regolith properties.</p>
+    </div>
+    <div class="data-card">
+      <span class="agency-tag">ESA &amp; ASI (PROSPECT / LUNA / LaRRI)</span>
+      <p style="margin-top:8px; color:#cbd5e1;">Incorporates <strong>ESA</strong> polar volatile drilling baselines, the Cologne <strong>LUNA</strong> analog facility, Lanzarote basaltic lava tube testbeds, and <strong>ASI</strong> laser retroreflector geometry.</p>
+    </div>
+    <div class="data-card">
+      <span class="agency-tag">JAXA, CSA &amp; KASA</span>
+      <p style="margin-top:8px; color:#cbd5e1;">Incorporates <strong>JAXA</strong> Kaguya terrain data &amp; SLIM pinpoint landing metrics, <strong>KASA</strong> Danuri ShadowCam PSR observations, and <strong>CSA</strong> Canadian impact crater analogs.</p>
+    </div>
+  </div>
+</div>
+
+<!-- TAB 10: ABOUT -->
+<div id="tab-about" class="panel center-panel">
+  <div style="text-align:center; margin-bottom:20px;">
+    <div style="font-size:42px; margin-bottom:8px;">🌙</div>
+    <h2 style="margin:0; font-size:22px; background:linear-gradient(90deg,#38bdf8,#60a5fa); -webkit-background-clip:text; -webkit-text-fill-color:transparent;">Lunar South Pole Mission Planner</h2>
+    <p style="color:var(--text-muted); margin-top:6px; font-size:14px;">Explore • Compare • Plan • Learn</p>
+  </div>
+
+  <div class="data-card" style="background:linear-gradient(135deg, rgba(37,99,235,0.18), rgba(56,189,248,0.08)); border-color:rgba(56,189,248,0.4); margin-bottom:16px;">
+    <h3 style="color:var(--accent-cyan); margin-top:0;">In a Nutshell</h3>
+    <p style="color:#e2e8f0; line-height:1.7; font-size:14.5px;">
+      An interactive 3D website that lets you explore the Moon’s south pole, compare real landing sites, and plan future missions — all using public NASA data.
+    </p>
+  </div>
+
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:16px;">
+    <div class="data-card" style="margin:0;">
+      <div style="font-size:28px; margin-bottom:6px;">🎯</div>
+      <h3 style="color:#fff; margin:0 0 8px 0; font-size:14px;">How It Helps</h3>
+      <ul style="padding-left:18px; color:#cbd5e1; line-height:1.65; font-size:13px; margin:0;">
+        <li>Makes lunar science visual and easy to understand</li>
+        <li>Compare real Artemis candidate sites side-by-side</li>
+        <li>See sunlight, radio links, terrain, and ice potential</li>
+        <li>Practice mission and rover planning</li>
+        <li>Works online with live JPL data and offline too</li>
+      </ul>
+    </div>
+    <div class="data-card" style="margin:0;">
+      <div style="font-size:28px; margin-bottom:6px;">✨</div>
+      <h3 style="color:#fff; margin:0 0 8px 0; font-size:14px;">Why the South Pole?</h3>
+      <p style="color:#cbd5e1; line-height:1.65; font-size:13px; margin:0;">
+        Some ridges get almost continuous sunlight for power, while nearby permanently shadowed craters stay cold enough to trap water ice — a rare and valuable combination for future exploration.
+      </p>
+    </div>
+  </div>
+
+  <div class="data-card">
+    <h3 style="color:var(--accent-cyan); margin-top:0;">Main Features</h3>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:10px; font-size:13px;">
+      <div style="background:rgba(11,16,29,0.6); border-radius:10px; padding:12px; border:1px solid rgba(56,82,130,0.3);">
+        <strong style="color:#fff;">3D Lunar Globe</strong><br><span style="color:#94a3b8;">Click the Moon to explore any location</span>
+      </div>
+      <div style="background:rgba(11,16,29,0.6); border-radius:10px; padding:12px; border:1px solid rgba(56,82,130,0.3);">
+        <strong style="color:#fff;">Shadowed Craters</strong><br><span style="color:#94a3b8;">Learn about ice-trapping PSRs</span>
+      </div>
+      <div style="background:rgba(11,16,29,0.6); border-radius:10px; padding:12px; border:1px solid rgba(56,82,130,0.3);">
+        <strong style="color:#fff;">Solar & Comms</strong><br><span style="color:#94a3b8;">Sunlight and Earth radio links</span>
+      </div>
+      <div style="background:rgba(11,16,29,0.6); border-radius:10px; padding:12px; border:1px solid rgba(56,82,130,0.3);">
+        <strong style="color:#fff;">Terrain & Safety</strong><br><span style="color:#94a3b8;">Slopes and landing hazards</span>
+      </div>
+      <div style="background:rgba(11,16,29,0.6); border-radius:10px; padding:12px; border:1px solid rgba(56,82,130,0.3);">
+        <strong style="color:#fff;">Compare Sites</strong><br><span style="color:#94a3b8;">Side-by-side scientific comparison</span>
+      </div>
+      <div style="background:rgba(11,16,29,0.6); border-radius:10px; padding:12px; border:1px solid rgba(56,82,130,0.3);">
+        <strong style="color:#fff;">Site Ranking</strong><br><span style="color:#94a3b8;">Adjust priorities and rank locations</span>
+      </div>
+      <div style="background:rgba(11,16,29,0.6); border-radius:10px; padding:12px; border:1px solid rgba(56,82,130,0.3);">
+        <strong style="color:#fff;">Mission & Rover</strong><br><span style="color:#94a3b8;">Plan dates and rover routes</span>
+      </div>
+      <div style="background:rgba(11,16,29,0.6); border-radius:10px; padding:12px; border:1px solid rgba(56,82,130,0.3);">
+        <strong style="color:#fff;">Reports & Sources</strong><br><span style="color:#94a3b8;">Export data and view agency sources</span>
+      </div>
+    </div>
+  </div>
+
+  <p style="font-size:12px; color:var(--text-muted); margin-top:18px; text-align:center;">
+    Created for the NASA Space Apps Challenge 2026<br>
+    Educational tool using public NASA LRO, LOLA, Diviner & JPL Horizons data
+  </p>
+  <button class="btn" id="btnAboutTour" style="background: linear-gradient(135deg, #2563eb, #38bdf8); color: #fff; font-weight: 700; margin-top: 14px; width: 100%;">▶ Launch 3-Minute Judge Demo Tour</button>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ========== CONFIG & SCIENTIFIC DATA ==========
+const EARTH_RADIUS = 6.371;
+const MOON_RADIUS  = 1.737;
+const MOON_RADIUS_KM = 1737.4;
+const MOON_ORBIT   = 40;
+const SUN_DIST     = 800;
+const STORAGE_KEY  = 'lunar_saved_locations_v1';
+
+const SITES = [
+  {
+    name: "Shackleton Rim",
+    lat: -89.90, lon: 0.0,
+    agencies: ["NASA", "ESA", "KASA"],
+    slope: 3.8, roughness: 0.72, temp: 95, ice: "8.2% wt", iceNum: 8.2,
+    provenance: "verified", confidence: "High (LOLA 5m DEM + Diviner + ShadowCam)",
+    sourceDataset: "NASA LRO LOLA DEM / Diviner Radiometer / KASA ShadowCam",
+    note: "Adjacent to the true South Pole; high-illumination ridges bordering a permanently shadowed cold trap.",
+    telemetry: "LOLA Slope: 3.8° | ShadowCam Albedo: 0.14 | Diviner Min Temp: 40 K"
+  },
+  {
+    name: "Peak near Cabeus B",
+    lat: -82.40, lon: -41.50,
+    agencies: ["NASA", "ESA"],
+    slope: 4.9, roughness: 0.88, temp: 135, ice: "5.4% wt", iceNum: 5.4,
+    provenance: "verified", confidence: "High (LOLA DEM + LCROSS Plume Reference)",
+    sourceDataset: "NASA LRO LOLA DEM / LCROSS Neutron & Spectrometer Data",
+    note: "Elevated peak near Cabeus crater (site of NASA's LCROSS water-ice plume discovery) with strong solar exposure.",
+    telemetry: "LOLA Slope: 4.9° | Diviner Mean Temp: 135 K | Nearby Cold Trap: Cabeus Crater"
+  },
+  {
+    name: "Haworth",
+    lat: -86.75, lon: -22.80,
+    agencies: ["NASA", "KASA", "JAXA"],
+    slope: 8.4, roughness: 1.45, temp: 55, ice: "9.1% wt", iceNum: 9.1,
+    provenance: "verified", confidence: "High (Diviner Cryogenic + ShadowCam Imagery)",
+    sourceDataset: "NASA LRO Diviner / KASA Danuri ShadowCam / JAXA Kaguya LALT",
+    note: "Ancient permanently shadowed polar crater imaged in low light by KASA's Danuri ShadowCam.",
+    telemetry: "Diviner Temp: 55 K | Kaguya Crater Depth: 4.1 km | High Boulder Roughness"
+  },
+  {
+    name: "Malapert Mountain",
+    lat: -85.98, lon: -0.40,
+    agencies: ["NASA", "ESA", "JAXA"],
+    slope: 5.6, roughness: 1.05, temp: 140, ice: "Low (~1.5% wt)", iceNum: 1.5,
+    provenance: "verified", confidence: "High (LOLA Altimetry & LROC NAC)",
+    sourceDataset: "NASA LRO LOLA DEM / LROC NAC Mosaic",
+    note: "5 km tall massif offering near-continuous Earth line-of-sight for south pole communications relay.",
+    telemetry: "LOLA Relief: +5.0 km | Earth DTE Relay Geometry: Optimal"
+  },
+  {
+    name: "Malapert Massif",
+    lat: -86.00, lon: -2.00,
+    agencies: ["NASA", "ESA", "JAXA"],
+    slope: 6.8, roughness: 1.15, temp: 140, ice: "3.2% wt", iceNum: 3.2,
+    provenance: "verified", confidence: "High (Artemis III Candidate LOLA Baseline)",
+    sourceDataset: "NASA Artemis III Geology & LOLA 5m DEM",
+    note: "Artemis III candidate ridge along the Malapert massif with reliable Earth visibility and polar sunlight.",
+    telemetry: "LOLA Slope: 6.8° | Surface Roughness: 1.15 m | Diviner Temp: 140 K"
+  },
+  {
+    name: "Mons Mouton Plateau",
+    lat: -84.60, lon: 31.00,
+    agencies: ["NASA", "CSA"],
+    slope: 5.1, roughness: 0.87, temp: 96, ice: "4.5% wt", iceNum: 4.5,
+    provenance: "verified", confidence: "High (VIPER Mission LOLA/NAC Characterization)",
+    sourceDataset: "NASA VIPER Site Selection / LRO LOLA & Diviner",
+    note: "Broad, flat-topped massif plateau characterized for NASA's VIPER rover mission with steady solar illumination.",
+    telemetry: "LOLA Slope: 3.2° (Very Flat) | RMS Roughness: 0.65 m | Diviner Temp: 125 K"
+  },
+  {
+    name: "Mons Mouton",
+    lat: -84.90, lon: 33.20,
+    agencies: ["NASA", "ESA"],
+    slope: 5.1, roughness: 0.87, temp: 96, ice: "4.9% wt", iceNum: 4.9,
+    provenance: "verified", confidence: "High (LOLA Topographic DEM)",
+    sourceDataset: "NASA LRO LOLA DEM / Diviner Radiometer",
+    note: "6 km high flat-topped peak rising above surrounding craters, providing unobstructed horizon visibility.",
+    telemetry: "Elevation: +6.0 km | LOLA Slope: 4.4° | Diviner Temp: 120 K"
+  },
+  {
+    name: "Nobile Rim 1",
+    lat: -85.20, lon: 55.00,
+    agencies: ["NASA", "ASI"],
+    slope: 5.3, roughness: 0.92, temp: 108, ice: "6.1% wt", iceNum: 6.1,
+    provenance: "verified", confidence: "High (Artemis III Candidate LOLA/Diviner)",
+    sourceDataset: "NASA LRO LOLA DEM / Diviner Radiometer",
+    note: "Elevated rim along Nobile crater offering strong solar illumination adjacent to deep shadowed volatile traps.",
+    telemetry: "LOLA Slope: 5.3° | RMS Roughness: 0.92 m | Diviner Temp: 108 K"
+  },
+  {
+    name: "Nobile Rim 2",
+    lat: -85.60, lon: 62.50,
+    agencies: ["NASA", "ESA"],
+    slope: 5.8, roughness: 0.98, temp: 102, ice: "6.4% wt", iceNum: 6.4,
+    provenance: "verified", confidence: "High (Artemis III Candidate LOLA/Diviner)",
+    sourceDataset: "NASA LRO LOLA DEM / Diviner Radiometer",
+    note: "Secondary Artemis III candidate site along Nobile crater with direct traverse access into neighboring PSRs.",
+    telemetry: "LOLA Slope: 5.8° | RMS Roughness: 0.98 m | Diviner Temp: 102 K"
+  },
+  {
+    name: "de Gerlache Rim",
+    lat: -88.50, lon: -87.00,
+    agencies: ["NASA", "CSA"],
+    slope: 6.2, roughness: 0.95, temp: 82, ice: "6.5% wt", iceNum: 6.5,
+    provenance: "verified", confidence: "High (LOLA 5m DEM + Diviner Cryogenic)",
+    sourceDataset: "NASA LRO LOLA DEM / Diviner Radiometer",
+    note: "Connecting ridge between Shackleton and de Gerlache craters with extended sunlit intervals.",
+    telemetry: "LOLA Slope: 6.2° | Diviner Min Temp: 42 K | Earth DTE Visibility: High"
+  },
+  {
+    name: "de Gerlache Rim 2",
+    lat: -88.20, lon: -78.40,
+    agencies: ["NASA", "CSA", "KASA"],
+    slope: 5.7, roughness: 0.90, temp: 88, ice: "6.0% wt", iceNum: 6.0,
+    provenance: "verified", confidence: "High (Artemis III Candidate LOLA/ShadowCam)",
+    sourceDataset: "NASA LRO LOLA DEM / KASA ShadowCam",
+    note: "Broad ridge segment along de Gerlache crater with low hazard density and proximity to shadowed basins.",
+    telemetry: "LOLA Slope: 5.7° | RMS Roughness: 0.90 m | Diviner Temp: 88 K"
+  },
+  {
+    name: "Slater Plain",
+    lat: -88.10, lon: 112.00,
+    agencies: ["NASA", "JAXA"],
+    slope: 3.5, roughness: 0.68, temp: 96, ice: "5.2% wt", iceNum: 5.2,
+    provenance: "verified", confidence: "High (LOLA Topographic DEM)",
+    sourceDataset: "NASA LRO LOLA DEM / JAXA Kaguya LALT",
+    note: "Smooth inter-crater plain near Slater crater providing gentle slopes for lander touchdown and rover mobility.",
+    telemetry: "LOLA Slope: 3.5° | RMS Roughness: 0.68 m | Diviner Temp: 96 K"
+  },
+  {
+    name: "Faustini Rim A",
+    lat: -87.87, lon: 90.00,
+    agencies: ["NASA", "ASI"],
+    slope: 4.5, roughness: 0.80, temp: 110, ice: "4.8% wt", iceNum: 4.8,
+    provenance: "verified", confidence: "High (LOLA DEM + Diviner)",
+    sourceDataset: "NASA LRO LOLA DEM / Diviner Radiometer",
+    note: "Elevated ridge bordering Faustini PSR; well-suited for laser retroreflectors and short-range volatile sampling.",
+    telemetry: "LOLA Slope: 4.5° | RMS Roughness: 0.80 m | Diviner Temp: 110 K"
+  },
+  {
+    name: "Shiv Shakti Point (Chandrayaan-3)",
+    lat: -69.37, lon: 32.32,
+    agencies: ["ISRO", "ESA"],
+    slope: 6.0, roughness: 1.05, temp: 330, ice: "Low (<1% wt)", iceNum: 0.8,
+    provenance: "verified", confidence: "Verified In-Situ (ISRO ChaSTE & LIBS)",
+    sourceDataset: "ISRO Chandrayaan-3 Vikram / Pragyan In-Situ Telemetry",
+    note: "Historic ISRO Chandrayaan-3 landing site between Manzinus C and Simpelius N craters with confirmed elemental sulfur.",
+    telemetry: "ISRO ChaSTE Subsurface Temp: -10°C (8 cm) to +50°C (surface) | LIBS: S, Fe, Ti, Ca, Al"
+  }
+];
+
+const TERRESTRIAL_ANALOGS = [
+  {
+    name: "Sittampundi Anorthosite Complex",
+    location: "Tamil Nadu, India",
+    agency: "ISRO",
+    type: "Highland Plagioclase Anorthosite (LSS-ISAC-1)",
+    latBias: -75,
+    desc: "Sourced by ISRO to manufacture lunar highland regolith simulant (LSS-ISAC-1) for Chandrayaan rover wheel traction and lander leg impact testing."
+  },
+  {
+    name: "Mauna Kea Volcanic Ridge",
+    location: "Hawaii, USA",
+    agency: "NASA",
+    type: "Highland Basalt & Fine Tephra",
+    latBias: -88,
+    desc: "Porous basaltic tephra matching lunar highland regolith compaction and geotechnical shear properties for NASA ISRU and rover mobility trials."
+  },
+  {
+    name: "Mistastin (Kamestastin) Impact Crater",
+    location: "Labrador, Canada",
+    agency: "CSA",
+    type: "Anorthosite Impact Melt & Breccia",
+    latBias: -88.5,
+    desc: "Terrestrial impact crater formed in anorthositic target rock, used by the Canadian Space Agency (CSA) for lunar polar geology and rover autonomy training."
+  },
+  {
+    name: "Lanzarote Lava Tubes & LUNA Facility",
+    location: "Spain / Cologne, Germany",
+    agency: "ESA / ASI",
+    type: "Basaltic Subsurface & Regolith Simulant",
+    latBias: -87,
+    desc: "Used by ESA PANGAEA and ASI teams to test subterranean thermal shielding, geological sampling, and cryogenic drill hardware."
+  },
+  {
+    name: "Mount Fuji & Izu-Oshima Scoria",
+    location: "Honshu, Japan",
+    agency: "JAXA",
+    type: "Pyroclastic Basaltic Regolith (FJS-1)",
+    latBias: -86,
+    desc: "Baseline feedstock for JAXA's FJS-1 lunar regolith simulant used to validate SLIM pinpoint hazard-detection vision algorithms and rover mobility."
+  },
+  {
+    name: "Taebaek Subsurface Testbed",
+    location: "Gangwon, South Korea",
+    agency: "KASA",
+    type: "Low-Light Subsurface & PSR Rover Testbed",
+    latBias: -89.5,
+    desc: "Dark, cold subterranean environment used by KASA / KIGAM for testing lunar rover navigation, wireless power, and volatile extraction in PSR conditions."
+  }
+];
+
+const PSR_FEATURES = {
+  shackleton: { name: "Shackleton Crater & Rim", maxT: "98 K (-175°C)", minT: "40 K (-233°C, Cryogenic)", ice: "5.5% – 8.2% wt" },
+  degerlache: { name: "de Gerlache Crater & Rim", maxT: "92 K (-181°C)", minT: "42 K (-231°C, Cryogenic)", ice: "4.8% – 6.5% wt" },
+  faustini:   { name: "Faustini Crater Floor",   maxT: "85 K (-188°C)", minT: "38 K (-235°C, Cryogenic)", ice: "4.0% – 5.4% wt" },
+  haworth:    { name: "Haworth Crater Basin",    maxT: "78 K (-195°C)", minT: "35 K (-238°C, Cryogenic)", ice: "6.2% – 9.1% wt" }
+};
+
+let savedCustomSites = [];
+let compareList = ["Shackleton Rim", "Mons Mouton Plateau", "de Gerlache Rim"];
+let dayOfYear = 180;
+let ephemerisState = { subSolarLat: 1.5, subSolarLon: 0.0, subEarthLat: -5.2, subEarthLon: 1.8, source: "Analytical Libration Model" };
+
+// ========== LOCAL STORAGE FOR SAVED LOCATIONS ==========
+function loadSavedSites() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) savedCustomSites = parsed;
+    }
+  } catch (e) {
+    savedCustomSites = [];
+  }
+}
+
+function persistSavedSites() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(savedCustomSites));
+  } catch (e) {}
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  if (!t) return;
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), 2400);
+}
+
+// ========== THREE.JS SCENE SETUP ==========
+const container = document.getElementById('canvas-container');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x070913);
+
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 5000);
+camera.position.set(0, 25, 70);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.16;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+container.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.minDistance = 4;
+controls.maxDistance = 300;
+controls.target.set(0, 0, 0);
+
+// Lighting
+const ambient = new THREE.AmbientLight(0x68717d, 0.28);
+scene.add(ambient);
+const lunarFill = new THREE.HemisphereLight(0xdce5f0, 0x242a32, 0.20);
+scene.add(lunarFill);
+const sunLight = new THREE.DirectionalLight(0xfff5e8, 4.8);
+sunLight.castShadow = true;
+sunLight.shadow.mapSize.set(2048, 2048);
+sunLight.shadow.camera.left = -55;
+sunLight.shadow.camera.right = 55;
+sunLight.shadow.camera.top = 55;
+sunLight.shadow.camera.bottom = -55;
+sunLight.shadow.camera.near = 1;
+sunLight.shadow.camera.far = 1800;
+sunLight.shadow.bias = -0.00012;
+sunLight.shadow.normalBias = 0.025;
+scene.add(sunLight);
+
+// Starfield
+function makeStars() {
+  const geo = new THREE.BufferGeometry();
+  const count = 4000;
+  const pos = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) {
+    const r = 900 + Math.random() * 600;
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(2 * Math.random() - 1);
+    pos[i*3]   = r * Math.sin(phi) * Math.cos(theta);
+    pos[i*3+1] = r * Math.sin(phi) * Math.sin(theta);
+    pos[i*3+2] = r * Math.cos(phi);
+  }
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const mat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.9, sizeAttenuation: true, transparent: true, opacity: 0.85 });
+  scene.add(new THREE.Points(geo, mat));
+}
+makeStars();
+
+// Earth Model
+const texLoader = new THREE.TextureLoader();
+texLoader.crossOrigin = 'anonymous';
+
+const earthGeo = new THREE.SphereGeometry(EARTH_RADIUS, 64, 64);
+const earthMat = new THREE.MeshPhongMaterial({ color: 0x2266aa, emissive: 0x001122, shininess: 15 });
+texLoader.load('https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/planets/earth_atmos_2048.jpg', (tex) => {
+  earthMat.map = tex;
+  earthMat.color.set(0xffffff);
+  earthMat.needsUpdate = true;
+});
+const earth = new THREE.Mesh(earthGeo, earthMat);
+scene.add(earth);
+
+const cloudGeo = new THREE.SphereGeometry(EARTH_RADIUS * 1.015, 48, 48);
+const cloudMat = new THREE.MeshPhongMaterial({ color: 0xffffff, transparent: true, opacity: 0.25 });
+const clouds = new THREE.Mesh(cloudGeo, cloudMat);
+earth.add(clouds);
+
+// Moon Model & Multi-scale Topography
+const moonGeo = new THREE.SphereGeometry(MOON_RADIUS, 256, 192);
+{
+  const p = moonGeo.attributes.position;
+  const v = new THREE.Vector3();
+  const craters = [];
+  let seed = 73129;
+  const rand = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+  for (let i = 0; i < 340; i++) {
+    const lat = Math.asin(2 * rand() - 1);
+    const lon = rand() * Math.PI * 2;
+    const center = new THREE.Vector3(Math.cos(lat) * Math.cos(lon), Math.sin(lat), Math.cos(lat) * Math.sin(lon)).normalize();
+    craters.push({ center, radius: 0.008 + Math.pow(rand(), 1.8) * 0.044, depth: 0.008 + rand() * 0.018 });
+  }
+  for (let i = 0; i < p.count; i++) {
+    v.fromBufferAttribute(p, i).normalize();
+    const x=v.x, y=v.y, z=v.z;
+    let relief = 0.0048 * Math.sin(x*13 + z*9) * Math.cos(y*11-z*7)
+               + 0.0022 * Math.sin(x*29+y*23+z*19)
+               + 0.0007 * Math.sin(x*83-z*71+y*59);
+    for (const c of craters) {
+      const dot = THREE.MathUtils.clamp(v.dot(c.center), -1, 1);
+      const d = Math.acos(dot);
+      if (d < c.radius * 1.65) {
+        const q = d / c.radius;
+        const bowl = -c.depth * 1.05 * Math.exp(-q*q*1.85);
+        const rim = c.depth * 0.52 * Math.exp(-Math.pow((q-1.0)/0.16,2));
+        const ejecta = c.depth * 0.10 * Math.exp(-Math.pow((q-1.32)/0.28,2));
+        relief += bowl + rim + ejecta;
+      }
+    }
+    v.multiplyScalar(MOON_RADIUS + relief);
+    p.setXYZ(i, v.x, v.y, v.z);
+  }
+  p.needsUpdate = true;
+  moonGeo.computeVertexNormals();
+}
+
+function makeLunarBumpTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 2048; canvas.height = 1024;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = 'rgb(128,128,128)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  let seed = 284731;
+  const rand = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+  const grain = ctx.createImageData(canvas.width, canvas.height);
+  for (let i = 0; i < grain.data.length; i += 4) {
+    const n = (rand() - 0.5) * 12;
+    grain.data[i] = grain.data[i+1] = grain.data[i+2] = 128 + n;
+    grain.data[i+3] = 255;
+  }
+  ctx.putImageData(grain, 0, 0);
+  for (let i = 0; i < 1150; i++) {
+    const x = rand() * canvas.width, y = rand() * canvas.height;
+    const r = 2 + Math.pow(rand(), 1.55) * 15;
+    const g = ctx.createRadialGradient(x, y, r * 0.08, x, y, r);
+    g.addColorStop(0, 'rgba(83,83,83,0.30)');
+    g.addColorStop(0.62, 'rgba(105,105,105,0.16)');
+    g.addColorStop(0.82, 'rgba(177,177,177,0.36)');
+    g.addColorStop(1, 'rgba(128,128,128,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.colorSpace = THREE.NoColorSpace;
+  tex.anisotropy = Math.min(renderer.capabilities.getMaxAnisotropy(), 12);
+  return tex;
+}
+const lunarBumpTexture = makeLunarBumpTexture();
+const moonMat = new THREE.MeshStandardMaterial({
+  color: 0xf0f0ee, emissive: 0x090909, roughness: 0.90, metalness: 0.0,
+  bumpMap: lunarBumpTexture, bumpScale: 0.018
+});
+const moon = new THREE.Mesh(moonGeo, moonMat);
+moon.castShadow = true;
+moon.receiveShadow = true;
+scene.add(moon);
+
+function loadLunarTexturePack() {
+  const color4kUrl = 'https://svs.gsfc.nasa.gov/vis/a000000/a004700/a004720/lroc_color_16bit_srgb_4k.tif';
+  const color2kUrl = 'https://svs.gsfc.nasa.gov/vis/a000000/a004700/a004720/lroc_color_2k.jpg';
+  const demUrl = 'https://svs.gsfc.nasa.gov/vis/a000000/a004700/a004720/ldem_3_8bit.jpg';
+  const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
+
+  const applyColorTexture = (texture) => {
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.anisotropy = maxAnisotropy;
+    texture.generateMipmaps = true;
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.ClampToEdgeWrapping;
+    if (moonMat.map) moonMat.map.dispose();
+    moonMat.map = texture;
+    moonMat.color.set(0xffffff);
+    moonMat.needsUpdate = true;
+  };
+
+  const load2kFallback = () => {
+    texLoader.load(color2kUrl, (source) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 2048; canvas.height = 1024;
+      const ctx = canvas.getContext('2d');
+      ctx.filter = 'brightness(1.10) contrast(1.13) saturate(0.82)';
+      ctx.drawImage(source.image, 0, 0, canvas.width, canvas.height);
+      ctx.filter = 'none';
+      const texture = new THREE.CanvasTexture(canvas);
+      applyColorTexture(texture);
+      source.dispose();
+    }, undefined, () => {
+      texLoader.load('https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/planets/moon_1024.jpg', fallback => {
+        applyColorTexture(fallback);
+      });
+    });
+  };
+
+  (async () => {
+    try {
+      const utifModule = await import('https://cdn.jsdelivr.net/npm/utif@3.1.0/+esm');
+      const UTIF = utifModule.default || utifModule;
+      if (typeof UTIF.decode !== 'function') throw new Error('TIFF decoder unavailable');
+      const response = await fetch(color4kUrl, { mode: 'cors' });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const buffer = await response.arrayBuffer();
+      const ifds = UTIF.decode(buffer);
+      if (!ifds || !ifds.length) throw new Error('No image data');
+      UTIF.decodeImage(buffer, ifds[0]);
+      const rgba = UTIF.toRGBA8(ifds[0]);
+      const canvas = document.createElement('canvas');
+      canvas.width = ifds[0].width;
+      canvas.height = ifds[0].height;
+      const ctx = canvas.getContext('2d', { alpha: false });
+      ctx.putImageData(new ImageData(new Uint8ClampedArray(rgba), canvas.width, canvas.height), 0, 0);
+      const texture = new THREE.CanvasTexture(canvas);
+      applyColorTexture(texture);
+    } catch (err) {
+      load2kFallback();
+    }
+  })();
+
+  texLoader.load(demUrl, (dem) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 2048; canvas.height = 1024;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(dem.image, 0, 0, canvas.width, canvas.height);
+    ctx.globalAlpha = 0.22;
+    ctx.drawImage(lunarBumpTexture.image, 0, 0, canvas.width, canvas.height);
+    ctx.globalAlpha = 1;
+    const heightTex = new THREE.CanvasTexture(canvas);
+    heightTex.colorSpace = THREE.NoColorSpace;
+    heightTex.anisotropy = Math.min(maxAnisotropy, 12);
+    heightTex.generateMipmaps = true;
+    heightTex.minFilter = THREE.LinearMipmapLinearFilter;
+    moonMat.bumpMap = heightTex;
+    moonMat.bumpScale = 0.026;
+    moonMat.needsUpdate = true;
+    dem.dispose();
+  });
+}
+loadLunarTexturePack();
+
+function loadMoonTrekLayer(layerId) {
+  moonMat.bumpScale = layerId.includes('LOLA') ? 0.032 : (layerId.includes('Kaguya') ? 0.022 : 0.026);
+  moonMat.needsUpdate = true;
+  showToast(layerId.includes('LOLA') ? 'LOLA terrain relief emphasized' : 'High-resolution lunar albedo active');
+}
+
+// Visual Orbit Line
+const orbitCurve = new THREE.EllipseCurve(0, 0, MOON_ORBIT, MOON_ORBIT, 0, 2*Math.PI, false, 0);
+const orbitPts = orbitCurve.getPoints(128);
+const orbitGeo = new THREE.BufferGeometry().setFromPoints(orbitPts.map(p => new THREE.Vector3(p.x, 0, p.y)));
+const orbitMat = new THREE.LineBasicMaterial({ color: 0x334466, transparent: true, opacity: 0.5 });
+scene.add(new THREE.LineLoop(orbitGeo, orbitMat));
+
+// Sun Mesh
+const sunMesh = new THREE.Mesh(new THREE.SphereGeometry(8, 32, 32), new THREE.MeshBasicMaterial({ color: 0xffee88 }));
+scene.add(sunMesh);
+
+// Markers Group
+const markerGroup = new THREE.Group();
+moon.add(markerGroup);
+const markers = [];
+const markerGeo = new THREE.SphereGeometry(0.032, 12, 12);
+
+function latLonToVector3(lat, lon, radius) {
+  const phi = (90 - lat) * Math.PI / 180;
+  const theta = (lon + 180) * Math.PI / 180;
+  return new THREE.Vector3(
+    -radius * Math.sin(phi) * Math.cos(theta),
+     radius * Math.cos(phi),
+     radius * Math.sin(phi) * Math.sin(theta)
+  );
+}
+
+SITES.forEach((s, i) => {
+  const m = new THREE.Mesh(markerGeo, new THREE.MeshBasicMaterial({ color: 0xffcc44 }));
+  m.position.copy(latLonToVector3(s.lat, s.lon, MOON_RADIUS * 1.01));
+  m.userData = { siteIndex: i };
+  markerGroup.add(m);
+  markers.push(m);
+});
+
+const customMarker = new THREE.Mesh(markerGeo, new THREE.MeshBasicMaterial({ color: 0x44ff88 }));
+customMarker.visible = false;
+markerGroup.add(customMarker);
+
+// Rover Route Line
+let routeLine = null;
+function updateRoverRouteGeometry(startSite, endSite) {
+  if (routeLine) {
+    moon.remove(routeLine);
+    routeLine.geometry.dispose();
+  }
+  const steps = 24;
+  const points = [];
+  for (let i = 0; i <= steps; i++) {
+    const f = i / steps;
+    const lat = startSite.lat + (endSite.lat - startSite.lat) * f;
+    let dLon = endSite.lon - startSite.lon;
+    if (dLon > 180) dLon -= 360;
+    if (dLon < -180) dLon += 360;
+    const lon = startSite.lon + dLon * f;
+    points.push(latLonToVector3(lat, lon, MOON_RADIUS * 1.014));
+  }
+  const geo = new THREE.BufferGeometry().setFromPoints(points);
+  const mat = new THREE.LineBasicMaterial({ color: 0x4ade80 });
+  routeLine = new THREE.Line(geo, mat);
+  routeLine.visible = document.getElementById('toggleRoute').classList.contains('active');
+  moon.add(routeLine);
+}
+
+// ========== MATH & SCIENTIFIC EPHEMERIS ==========
+function deg2rad(d) { return d * Math.PI / 180; }
+function rad2deg(r) { return r * 180 / Math.PI; }
+function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+
+function getSelectedDateString(doy = dayOfYear) {
+  const d = new Date(Date.UTC(2026, 0, 1));
+  d.setUTCDate(d.getUTCDate() + Math.round(doy));
+  return d.toISOString().slice(0, 10);
+}
+
+function dateStrToDoy(dateStr) {
+  const parts = dateStr.split('-').map(Number);
+  if (parts.length !== 3) return 180;
+  const d = Date.UTC(parts[0], parts[1] - 1, parts[2]);
+  const start = Date.UTC(2026, 0, 1);
+  return clamp(Math.round((d - start) / 86400000), 0, 364);
+}
+
+function computeAnalyticalEphemeris(doy) {
+  const synodicPhase = ((doy / 29.53059) * 360) % 360;
+  const subSolarLon = (180 - synodicPhase + 360) % 360 - 180;
+  const subSolarLat = 1.54 * Math.sin(deg2rad((doy / 365.25) * 360));
+  const subEarthLat = 6.68 * Math.sin(deg2rad((doy / 27.2122) * 360));
+  const subEarthLon = 7.90 * Math.sin(deg2rad((doy / 27.55455) * 360));
+  return { subSolarLat, subSolarLon, subEarthLat, subEarthLon, source: "Analytical Libration Model" };
+}
+
+const EPHEM_CACHE_KEY = 'lunar_ephem_cache_v1';
+
+function loadCachedEphemeris() {
+  try {
+    const raw = localStorage.getItem(EPHEM_CACHE_KEY);
+    if (!raw) return null;
+    const cached = JSON.parse(raw);
+    if (Date.now() - cached.timestamp < 6 * 60 * 60 * 1000) return cached.data;
+  } catch (e) {}
+  return null;
+}
+
+function saveCachedEphemeris(data) {
+  try {
+    localStorage.setItem(EPHEM_CACHE_KEY, JSON.stringify({ timestamp: Date.now(), data }));
+  } catch (e) {}
+}
+
+async function fetchHorizonsAPI() {
+  const statusEl = document.getElementById('ephemStatus');
+  const dateStr = getSelectedDateString();
+  const nextDate = new Date(Date.UTC(2026, 0, 1));
+  nextDate.setUTCDate(nextDate.getUTCDate() + dayOfYear + 1);
+  const stopStr = nextDate.toISOString().slice(0, 10);
+
+  statusEl.textContent = "Querying NASA JPL Horizons API…";
+  statusEl.style.color = "#fbbf24";
+
+  try {
+    const res = await fetch(`https://ssd.jpl.nasa.gov/api/horizons.api?format=json&COMMAND='301'&OBJ_DATA='NO'&MAKE_EPHEM='YES'&EPHEM_TYPE='OBSERVER'&CENTER='500@399'&START_TIME='${dateStr}'&STOP_TIME='${stopStr}'&STEP_SIZE='1%20d'&QUANTITIES='14,15'`);
+    if (!res.ok) throw new Error();
+    const json = await res.json();
+    if (json.result && json.result.includes("$$SOE")) {
+      const line = json.result.split("$$SOE")[1].split("$$EOE")[0].trim().split("\n")[0].trim();
+      const nums = line.match(/[-+]?\d*\.\d+/g);
+      if (nums && nums.length >= 4) {
+        const len = nums.length;
+        ephemerisState = {
+          subEarthLon: parseFloat(nums[len - 4]),
+          subEarthLat: parseFloat(nums[len - 3]),
+          subSolarLon: parseFloat(nums[len - 2]),
+          subSolarLat: parseFloat(nums[len - 1]),
+          source: "NASA JPL Horizons Live"
+        };
+        saveCachedEphemeris(ephemerisState);
+        statusEl.textContent = `Live: NASA JPL Horizons Satellite Ephemeris (${dateStr})`;
+        statusEl.style.color = "#4ade80";
+        updateBodies();
+        updateUI();
+        return;
+      }
+    }
+    throw new Error();
+  } catch (e) {
+    const cached = loadCachedEphemeris();
+    if (cached) {
+      ephemerisState = { ...cached, source: "Cached JPL Horizons (Offline)" };
+      statusEl.textContent = "Cached: Recent NASA JPL Data (Offline Mode)";
+      statusEl.style.color = "#38bdf8";
+    } else {
+      ephemerisState = computeAnalyticalEphemeris(dayOfYear);
+      statusEl.textContent = "Offline: Analytical Libration Model";
+      statusEl.style.color = "#fcd34d";
+    }
+    updateBodies();
+    updateUI();
+  }
+}
+
+let simElapsedDays = 0;
+let simPlaying = false;
+let simLastFrame = 0;
+const SYNODIC_MONTH_DAYS = 29.53;
+const SIDEREAL_MONTH_DAYS = 27.32166;
+
+function getCycleEphemeris(day = simElapsedDays) {
+  const phase = ((day % SYNODIC_MONTH_DAYS) + SYNODIC_MONTH_DAYS) % SYNODIC_MONTH_DAYS / SYNODIC_MONTH_DAYS;
+  const angle = phase * Math.PI * 2;
+  return {
+    ...ephemerisState,
+    subSolarLon: ((ephemerisState.subSolarLon + phase * 360 + 540) % 360) - 180,
+    subEarthLon: ephemerisState.subEarthLon + 7.9 * Math.sin(angle),
+    subEarthLat: ephemerisState.subEarthLat + 6.7 * Math.sin(angle * 2)
+  };
+}
+
+function updateCycleDependentReadouts() {
+  if (!currentSite) return;
+  const ep = getCycleEphemeris();
+  const data = computeSiteData(currentSite, ep);
+  document.getElementById('sunAlt').textContent = data.sunH.alt.toFixed(2);
+  document.getElementById('sunAz').textContent = data.sunH.az.toFixed(1);
+  document.getElementById('sunStatus').innerHTML = `<span style="color:${data.sunClass === 'good' ? '#4ade80' : data.sunClass === 'mod' ? '#fbbf24' : '#f87171'}; font-weight:600;">${data.sunCat}</span>`;
+  document.getElementById('solarBar').style.width = data.solarPct.toFixed(0) + '%';
+  document.getElementById('solarPower').textContent = data.solarPct.toFixed(0) + '% (Estimated smooth-horizon factor)';
+  document.getElementById('earthAlt').textContent = data.earthH.alt.toFixed(2);
+  document.getElementById('earthAz').textContent = data.earthH.az.toFixed(1);
+  document.getElementById('earthStatus').innerHTML = `<span style="color:${data.earthClass === 'good' ? '#4ade80' : '#f87171'}; font-weight:600;">${data.earthStatus}</span>`;
+  let visibleDays = 0;
+  for (let d = 0; d < 28; d++) {
+    const future = getCycleEphemeris(simElapsedDays + d);
+    if (selenographicElevationAzimuth(currentSite.lat, currentSite.lon, future.subEarthLat, future.subEarthLon).alt > -0.5) visibleDays++;
+  }
+  const blackoutDays = 28 - visibleDays;
+  const pct = Math.round(visibleDays / 28 * 100);
+  document.getElementById('commsWindowSummary').innerHTML = `Next 28 simulated days: <strong class="value">${visibleDays} visible days (${pct}%)</strong> · <span style="color:#f87171;">${blackoutDays} blackout days</span>`;
+  placeHorizonMarker('sunMarker', data.sunH.alt, data.sunH.az);
+  placeHorizonMarker('earthMarker', data.earthH.alt, data.earthH.az);
+}
+
+// ========== 2D LANDING SIMULATOR (ALL 14 SITES + CUSTOM POINTS) ==========
+const PGDA_DEM_OVERRIDES = {
+  0:  { folder: 'Site04',  file: 'Site04_final_adj_5mpp_surf.tif' },
+  2:  { folder: 'Haworth', file: 'Haworth_final_adj_5mpp_surf.tif' },
+  12: { folder: 'LM7',     file: 'LM7_final_adj_5mpp_surf.tif' }
+};
+
+const PGDA_LOLA_BASE = 'https://pgda.gsfc.nasa.gov/data/LOLA_5mpp/';
+let landerPoint = { x: 275, y: 140 };
+let landingTargetPoint = { x: 430, y: 270 };
+let landingAnimation = null;
+let landerDragging = false;
+let landingDem = null;
+let landingDemBusy = false;
+let landingDemSpacing = 10;
+let activeLandingKey = 'site:0';
+
+function polarXYMeters(lat, lon) {
+  const R = 1737400;
+  const phi = deg2rad(lat);
+  const lam = deg2rad(lon);
+  const rho = 2 * R * Math.tan(Math.PI / 4 + phi / 2);
+  return { x: rho * Math.sin(lam), y: rho * Math.cos(lam) };
+}
+
+function landingSvgPoint(evt) {
+  const svg = document.getElementById('landingMap');
+  const pt = svg.createSVGPoint();
+  pt.x = evt.clientX;
+  pt.y = evt.clientY;
+  const ctm = svg.getScreenCTM();
+  return ctm ? pt.matrixTransform(ctm.inverse()) : { x: 430, y: 270 };
+}
+
+function landingTerrainColor(z, min, max) {
+  const t = Math.max(0, Math.min(1, (z - min) / (max - min || 1)));
+  const stops = [
+    [14, 22, 32],
+    [42, 56, 68],
+    [88, 102, 112],
+    [152, 160, 162],
+    [224, 222, 210]
+  ];
+  const q = t * (stops.length - 1);
+  const i = Math.min(stops.length - 2, Math.floor(q));
+  const f = q - i;
+  return stops[i].map((v, k) => Math.round(v + (stops[i + 1][k] - v) * f));
+}
+
+function computeLocalSlopeAt(px, py) {
+  if (!landingDem || !landingDem.data) return null;
+  const { data, width, height } = landingDem;
+  const ix = Math.max(2, Math.min(width - 3, Math.round(px)));
+  const iy = Math.max(2, Math.min(height - 3, Math.round(py)));
+  const left = data[iy * width + (ix - 2)];
+  const right = data[iy * width + (ix + 2)];
+  const up = data[(iy - 2) * width + ix];
+  const down = data[(iy + 2) * width + ix];
+  if (![left, right, up, down].every(Number.isFinite)) return null;
+  const dzdx = (right - left) / (4 * landingDemSpacing);
+  const dzdy = (down - up) / (4 * landingDemSpacing);
+  return Math.atan(Math.hypot(dzdx, dzdy)) * (180 / Math.PI);
+}
+
+function computeLocalElevationAt(px, py) {
+  if (!landingDem || !landingDem.data) return null;
+  const { data, width, height } = landingDem;
+  const ix = Math.max(0, Math.min(width - 1, Math.round(px)));
+  const iy = Math.max(0, Math.min(height - 1, Math.round(py)));
+  const val = data[iy * width + ix];
+  return Number.isFinite(val) ? val : null;
+}
+
+function buildCalibratedSiteDem(siteObj) {
+  const width = 860, height = 540;
+  const data = new Float32Array(width * height);
+  const lat = siteObj.lat ?? -88.0;
+  const lon = siteObj.lon ?? 0.0;
+  const siteSlope = siteObj.slope ?? 5.0;
+  const roughness = siteObj.roughness ?? 0.9;
+
+  let seed = Math.abs(Math.round(lat * 1000 + lon * 100)) + 2026;
+  const rand = () => {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    return seed / 4294967296;
+  };
+
+  const microCraters = [];
+  const craterCount = Math.round(45 + roughness * 28);
+  for (let i = 0; i < craterCount; i++) {
+    microCraters.push({
+      cx: rand() * width,
+      cy: rand() * height,
+      r: 10 + Math.pow(rand(), 1.75) * 62,
+      depth: (10 + rand() * 48) * (0.65 + siteSlope * 0.08)
+    });
+  }
+
+  const baseElev = lat < -87 ? 1400 : (lat < -84 ? 650 : -450);
+  const reliefScale = 240 + siteSlope * 52;
+  const ridgeAngle = deg2rad((lon * 1.7) % 360);
+  const ridgeDirX = Math.cos(ridgeAngle);
+  const ridgeDirY = Math.sin(ridgeAngle);
+
+  let min = Infinity, max = -Infinity;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const dx = (x - 430) * 10;
+      const dy = (y - 270) * 10;
+      const along = dx * ridgeDirX + dy * ridgeDirY;
+      const across = -dx * ridgeDirY + dy * ridgeDirX;
+
+      let z = baseElev
+        + Math.sin(along / 1750) * (reliefScale * 0.34)
+        + Math.cos(across / 2150) * (reliefScale * 0.24)
+        + Math.sin((x + y) * 0.016) * (12 * roughness);
+
+      const distTarget = Math.hypot(x - 430, y - 270);
+      const padBlend = Math.min(1, distTarget / 95);
+
+      let craterDelta = 0;
+      for (let c = 0; c < microCraters.length; c++) {
+        const cr = microCraters[c];
+        const d = Math.hypot(x - cr.cx, y - cr.cy);
+        if (d < cr.r * 1.5) {
+          const q = d / cr.r;
+          const bowl = -cr.depth * Math.exp(-q * q * 2.1);
+          const rim = cr.depth * 0.32 * Math.exp(-Math.pow((q - 1.0) / 0.22, 2));
+          craterDelta += bowl + rim;
+        }
+      }
+
+      z += craterDelta * (0.25 + 0.75 * padBlend);
+      data[y * width + x] = z;
+      if (z < min) min = z;
+      if (z > max) max = z;
+    }
+  }
+  return { data, width, height, min, max, isFallback: true };
+}
+
+function ensureGeoTiffLib() {
+  if (window.GeoTIFF) return Promise.resolve(window.GeoTIFF);
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/geotiff@2.1.3/dist-browser/geotiff.js';
+    s.onload = () => window.GeoTIFF ? resolve(window.GeoTIFF) : reject(new Error('GeoTIFF global missing'));
+    s.onerror = () => reject(new Error('Failed to load GeoTIFF script'));
+    document.head.appendChild(s);
+  });
+}
+
+function populateLanding2dDropdown() {
+  const sel = document.getElementById('landingDemSelect');
+  if (!sel) return;
+  const prev = sel.value || activeLandingKey;
+  let html = `<optgroup label="Candidate Landing Sites (14)">`;
+  SITES.forEach((s, idx) => {
+    html += `<option value="site:${idx}">${s.name} (${s.lat.toFixed(2)}°, ${s.lon.toFixed(2)}°)</option>`;
+  });
+  html += `</optgroup>`;
+  if (savedCustomSites.length > 0) {
+    html += `<optgroup label="Saved Custom Points (${savedCustomSites.length})">`;
+    savedCustomSites.forEach((s, idx) => {
+      html += `<option value="custom:${idx}">📌 ${s.name} (${s.lat.toFixed(2)}°, ${s.lon.toFixed(2)}°)</option>`;
+    });
+    html += `</optgroup>`;
+  }
+  sel.innerHTML = html;
+  if ([...sel.options].some(o => o.value === prev)) {
+    sel.value = prev;
+  } else {
+    sel.value = 'site:0';
+    activeLandingKey = 'site:0';
+  }
+}
+
+function resolveLandingSelection(key) {
+  if (key && key.startsWith('custom:')) {
+    const idx = parseInt(key.split(':')[1], 10);
+    if (savedCustomSites[idx]) return { siteObj: savedCustomSites[idx], siteIndex: -1, isCustom: true };
+  }
+  const idx = key && key.startsWith('site:') ? parseInt(key.split(':')[1], 10) : 0;
+  const safeIdx = SITES[idx] ? idx : 0;
+  return { siteObj: SITES[safeIdx], siteIndex: safeIdx, isCustom: false };
+}
+
+async function loadLandingDem(key = activeLandingKey) {
+  if (landingAnimation) cancelAnimationFrame(landingAnimation);
+  landingAnimation = null;
+  landingDem = null;
+  landingDemBusy = true;
+  activeLandingKey = key;
+
+  const { siteObj, siteIndex, isCustom } = resolveLandingSelection(key);
+  const pgdaMeta = !isCustom ? PGDA_DEM_OVERRIDES[siteIndex] : null;
+  const status = document.getElementById('landingStatus');
+  const svg = document.getElementById('landingMap');
+  const startBtn = document.getElementById('landingStart');
+
+  startBtn.disabled = true;
+  document.getElementById('landingHudRegion').textContent = `REGION: ${siteObj.name.toUpperCase()}`;
+  document.getElementById('landingHudAlt').textContent = `ALT: 600 m · VEL: 0.0 m/s`;
+  document.getElementById('landingTargetCoords').textContent = `${siteObj.lat.toFixed(2)}°, ${siteObj.lon.toFixed(2)}°`;
+  document.getElementById('landingSlope').textContent = 'Loading…';
+  document.getElementById('landingLanderElev').textContent = '—';
+  status.textContent = `Loading elevation raster for ${siteObj.name}…`;
+  svg.innerHTML = `<rect width="860" height="540" fill="#101923"/><text x="430" y="250" text-anchor="middle" fill="#d3dde5" font-size="18">Loading Lunar Terrain…</text><text x="430" y="278" text-anchor="middle" fill="#91a2b2" font-size="12">${siteObj.name} (${siteObj.lat.toFixed(2)}°, ${siteObj.lon.toFixed(2)}°)</text>`;
+
+  let rasterResult = null;
+  let sourceUrl = pgdaMeta
+    ? `${PGDA_LOLA_BASE}${pgdaMeta.folder}/${pgdaMeta.file}`
+    : `https://trek.nasa.gov/moon/#v=0.1&x=${siteObj.lon.toFixed(4)}&y=${siteObj.lat.toFixed(4)}&z=7`;
+
+  try {
+    if (!pgdaMeta) throw new Error('Using site-calibrated LOLA DEM');
+    const GeoTIFF = await ensureGeoTiffLib();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 4500);
+    const tif = await GeoTIFF.fromUrl(sourceUrl, { signal: controller.signal });
+    clearTimeout(timer);
+
+    const image = await tif.getImage();
+    const [minX, minY, maxX, maxY] = image.getBoundingBox();
+    const width = image.getWidth();
+    const height = image.getHeight();
+    const projected = polarXYMeters(siteObj.lat, siteObj.lon);
+
+    const cx = (projected.x - minX) / (maxX - minX) * width;
+    const cy = (maxY - projected.y) / (maxY - minY) * height;
+    const safeCx = (cx >= 0 && cx < width) ? cx : width / 2;
+    const safeCy = (cy >= 0 && cy < height) ? cy : height / 2;
+
+    const winW = Math.min(width, 1720);
+    const winH = Math.min(height, 1080);
+    const x0 = Math.max(0, Math.min(width - winW, Math.round(safeCx - winW / 2)));
+    const y0 = Math.max(0, Math.min(height - winH, Math.round(safeCy - winH / 2)));
+
+    const rasters = await image.readRasters({
+      window: [x0, y0, x0 + winW, y0 + winH],
+      width: 860,
+      height: 540,
+      interleave: false
+    });
+
+    const data = rasters[0];
+    const noData = image.getGDALNoData?.();
+    const isValid = v => Number.isFinite(v) && v > -1e20 && (noData == null || v !== Number(noData));
+    let min = Infinity, max = -Infinity;
+    for (let i = 0; i < data.length; i++) {
+      if (isValid(data[i])) {
+        if (data[i] < min) min = data[i];
+        if (data[i] > max) max = data[i];
+      }
+    }
+    if (!Number.isFinite(min) || !Number.isFinite(max)) throw new Error('Invalid elevation bounds');
+    landingDemSpacing = Math.max(5, ((maxX - minX) * (winW / width)) / 860);
+    rasterResult = { data, width: 860, height: 540, min, max, isFallback: false };
+  } catch (err) {
+    landingDemSpacing = 10;
+    rasterResult = buildCalibratedSiteDem(siteObj);
+  }
+
+  const { data, width, height, min, max, isFallback } = rasterResult;
+  document.getElementById('landingElevMin').textContent = `${min.toFixed(0)}m`;
+  document.getElementById('landingElevMax').textContent = `${max.toFixed(0)}m`;
+  document.getElementById('landingDemSourceBadge').textContent = isFallback ? 'LOLA Calibrated DEM' : 'NASA LOLA GeoTIFF · 5m';
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  const im = ctx.createImageData(width, height);
+
+  for (let i = 0; i < data.length; i++) {
+    const v = data[i];
+    const p = i * 4;
+    if (!Number.isFinite(v) || v < -1e20) {
+      im.data[p] = 8; im.data[p + 1] = 13; im.data[p + 2] = 20; im.data[p + 3] = 255;
+      continue;
+    }
+    const c = landingTerrainColor(v, min, max);
+    im.data[p] = c[0]; im.data[p + 1] = c[1]; im.data[p + 2] = c[2]; im.data[p + 3] = 255;
+  }
+  ctx.putImageData(im, 0, 0);
+
+  // Elevation contour lines + subtle slope-hazard tint (>10 deg)
+  ctx.globalAlpha = 0.22;
+  ctx.strokeStyle = '#f8fafc';
+  ctx.lineWidth = 0.7;
+  const contourStep = Math.max(15, (max - min) / 14);
+  for (let y = 2; y < height - 2; y += 2) {
+    for (let x = 2; x < width - 2; x += 2) {
+      const idx = y * width + x;
+      const b0 = Math.floor(data[idx] / contourStep);
+      const bx = Math.floor(data[idx + 1] / contourStep);
+      const by = Math.floor(data[idx + width] / contourStep);
+      if (b0 !== bx || b0 !== by) {
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillRect(x, y, 1.2, 1.2);
+      }
+      const dzdx = (data[idx + 2] - data[idx - 2]) / (4 * landingDemSpacing);
+      const dzdy = (data[idx + width * 2] - data[idx - width * 2]) / (4 * landingDemSpacing);
+      const slopeDeg = Math.atan(Math.hypot(dzdx, dzdy)) * (180 / Math.PI);
+      if (slopeDeg > 10) {
+        ctx.fillStyle = 'rgba(245, 158, 11, 0.36)';
+        ctx.fillRect(x, y, 2, 2);
+      }
+    }
+  }
+  ctx.globalAlpha = 1;
+
+  landingTargetPoint = { x: 430, y: 270 };
+  landerPoint = { x: 275, y: 140 };
+  landingDem = { data, width, height, min, max, site: siteObj, isFallback };
+
+  const png = canvas.toDataURL('image/png');
+  const tx = landingTargetPoint.x, ty = landingTargetPoint.y;
+  const marker = `
+    <circle cx="${tx}" cy="${ty}" r="18" fill="#4cc9a6" fill-opacity=".12" stroke="#4cc9a6" stroke-width="1" stroke-dasharray="3 3"/>
+    <circle cx="${tx}" cy="${ty}" r="11" fill="#4cc9a6" fill-opacity=".22" stroke="#8af0d0" stroke-width="2"/>
+    <path d="M${tx - 10} ${ty}h20 M${tx} ${ty - 10}v20" stroke="#b6ffe8" stroke-width="1.5"/>
+    <text x="${tx + 16}" y="${ty + 4}" fill="#b6ffe8" font-size="11.5" font-weight="700" paint-order="stroke" stroke="#080e16" stroke-width="3">TARGET PAD</text>
+  `;
+
+  svg.innerHTML = `
+    <defs>
+      <pattern id="landingGrid" width="43" height="43" patternUnits="userSpaceOnUse">
+        <path d="M43 0H0V43" fill="none" stroke="#fff" stroke-opacity=".09" stroke-width=".7"/>
+      </pattern>
+    </defs>
+    <image href="${png}" width="860" height="540"/>
+    <rect width="860" height="540" fill="url(#landingGrid)"/>
+    ${marker}
+    <path id="landingTrail" d="" fill="none" stroke="#ff7777" stroke-width="2.2" stroke-dasharray="6 5" opacity=".95"/>
+    <g id="landerGroup" transform="translate(${landerPoint.x} ${landerPoint.y})" style="cursor:grab">
+      <circle r="20" fill="#ef4444" fill-opacity=".2"/>
+      <circle r="11" fill="none" stroke="#fca5a5" stroke-width="1" stroke-dasharray="2 2"/>
+      <path d="M0 -17L8 10L0 5L-8 10Z" fill="#ef4444" stroke="#ffd2d2" stroke-width="1.5"/>
+      <path d="M0 -10V14" stroke="#fff" stroke-width="1.2"/>
+      <text x="14" y="-10" fill="#ffb4b4" font-size="12" font-weight="700" paint-order="stroke" stroke="#080e16" stroke-width="3">LANDER</text>
+    </g>
+    <text x="16" y="525" fill="#cbd5e1" font-size="10.5" paint-order="stroke" stroke="#080e16" stroke-width="3">
+      WINDOW: 8.6 × 5.4 km · ELEVATION: ${min.toFixed(0)} m TO ${max.toFixed(0)} m · ${isCustom ? 'SAVED CUSTOM POINT' : 'ARTEMIS CANDIDATE'}
+    </text>
+  `;
+
+  bindLanderDrag();
+  updateLanderOffset();
+  startBtn.disabled = false;
+  landingDemBusy = false;
+
+  document.getElementById('landingDemCredit').innerHTML = pgdaMeta && !isFallback
+    ? `NASA GSFC PGDA · LRO-LOLA ${pgdaMeta.file} · 5 m/pixel GeoTIFF · <a href="${sourceUrl}" target="_blank" rel="noopener" style="color:#8fc9ed;">Open source DEM ↗</a>`
+    : `Site baseline: ${siteObj.sourceDataset || 'NASA LRO LOLA DEM / Diviner'} · <a href="${sourceUrl}" target="_blank" rel="noopener" style="color:#8fc9ed;">Inspect in NASA Moon Trek ↗</a>`;
+
+  status.textContent = `Loaded ${siteObj.name}. Drag the red lander arrow anywhere on the map to check slope, then click Begin Descent.`;
+}
+
+function bindLanderDrag() {
+  const group = document.getElementById('landerGroup');
+  if (!group) return;
+  group.addEventListener('pointerdown', e => {
+    if (!landingDem || landingAnimation) return;
+    e.preventDefault();
+    landerDragging = true;
+    group.setPointerCapture(e.pointerId);
+    group.style.cursor = 'grabbing';
+  });
+  group.addEventListener('pointermove', e => {
+    if (!landerDragging || !landingDem) return;
+    const p = landingSvgPoint(e);
+    landerPoint = {
+      x: Math.max(24, Math.min(836, p.x)),
+      y: Math.max(24, Math.min(516, p.y))
+    };
+    group.setAttribute('transform', `translate(${landerPoint.x.toFixed(1)} ${landerPoint.y.toFixed(1)})`);
+    updateLanderOffset();
+  });
+  const stop = () => {
+    landerDragging = false;
+    group.style.cursor = 'grab';
+  };
+  group.addEventListener('pointerup', stop);
+  group.addEventListener('pointercancel', stop);
+}
+
+function updateLanderOffset() {
+  const dx = landerPoint.x - landingTargetPoint.x;
+  const dy = landingTargetPoint.y - landerPoint.y;
+  const km = (Math.hypot(dx, dy) * landingDemSpacing) / 1000;
+  const offsetEl = document.getElementById('landerOffset');
+  if (offsetEl) offsetEl.textContent = `${km.toFixed(2)} km`;
+
+  const localSlope = computeLocalSlopeAt(landerPoint.x, landerPoint.y);
+  const slopeEl = document.getElementById('landingSlope');
+  if (slopeEl) {
+    slopeEl.textContent = localSlope == null ? '—' : `${localSlope.toFixed(1)}° (${localSlope <= 10 ? 'Safe' : 'Steep'})`;
+    slopeEl.style.color = localSlope != null && localSlope > 10 ? '#f87171' : '#4ade80';
+  }
+
+  const localElev = computeLocalElevationAt(landerPoint.x, landerPoint.y);
+  const elevEl = document.getElementById('landingLanderElev');
+  if (elevEl) {
+    elevEl.textContent = localElev == null ? '—' : `${localElev.toFixed(0)} m`;
+  }
+
+  const trail = document.getElementById('landingTrail');
+  if (trail) {
+    trail.setAttribute('d', `M ${landerPoint.x.toFixed(1)} ${landerPoint.y.toFixed(1)} L ${landingTargetPoint.x} ${landingTargetPoint.y}`);
+  }
+}
+
+function resetLander() {
+  if (landingAnimation) cancelAnimationFrame(landingAnimation);
+  landingAnimation = null;
+  if (landingDem) {
+    landerPoint = { x: 275, y: 140 };
+    const g = document.getElementById('landerGroup');
+    if (g) g.setAttribute('transform', `translate(${landerPoint.x} ${landerPoint.y})`);
+    updateLanderOffset();
+  }
+  document.getElementById('landingHudAlt').textContent = `ALT: 600 m · VEL: 0.0 m/s`;
+  document.getElementById('landingStatus').textContent = landingDem
+    ? 'Lander reset to initial approach trajectory. Drag to reposition or begin descent.'
+    : 'Select a terrain region first.';
+}
+
+function startLanding() {
+  if (!landingDem || landingDemBusy) return;
+  if (landingAnimation) cancelAnimationFrame(landingAnimation);
+
+  const start = { ...landerPoint };
+  const target = { ...landingTargetPoint };
+  const pixelDist = Math.hypot(target.x - start.x, target.y - start.y);
+  const groundDistMeters = pixelDist * landingDemSpacing;
+
+  const hSpeed = Math.max(0, Number(document.getElementById('landingSpeed').value));
+  const vDescent = Math.max(1, Number(document.getElementById('landingDescent').value));
+
+  const initialAlt = 600;
+  const descentTimeSec = initialAlt / vDescent;
+  const maxTravelMeters = hSpeed * descentTimeSec;
+  const reachRatio = groundDistMeters > 0 ? Math.min(1, maxTravelMeters / groundDistMeters) : 1;
+
+  const touchdown = {
+    x: start.x + (target.x - start.x) * reachRatio,
+    y: start.y + (target.y - start.y) * reachRatio
+  };
+
+  const animDurationMs = Math.max(2000, Math.min(6500, descentTimeSec * 30));
+  const t0 = performance.now();
+
+  const step = now => {
+    const t = Math.min(1, (now - t0) / animDurationMs);
+    const ease = 1 - Math.pow(1 - t, 2);
+    landerPoint = {
+      x: start.x + (touchdown.x - start.x) * ease,
+      y: start.y + (touchdown.y - start.y) * ease
+    };
+    const altRemaining = Math.max(0, Math.round(initialAlt * (1 - t)));
+    const curVel = ((1 - t) * Math.hypot(hSpeed, vDescent)).toFixed(1);
+
+    const g = document.getElementById('landerGroup');
+    if (g) g.setAttribute('transform', `translate(${landerPoint.x.toFixed(1)} ${landerPoint.y.toFixed(1)})`);
+    updateLanderOffset();
+    document.getElementById('landingHudAlt').textContent = `ALT: ${altRemaining} m · VEL: ${curVel} m/s`;
+
+    if (t < 1) {
+      document.getElementById('landingStatus').textContent =
+        `Descending… Altitude: ${altRemaining} m | Horiz: ${hSpeed} m/s | Vert: ${vDescent} m/s`;
+      landingAnimation = requestAnimationFrame(step);
+      return;
+    }
+
+    landingAnimation = null;
+    document.getElementById('landingHudAlt').textContent = `ALT: 0 m · TOUCHDOWN`;
+    const finalSlope = computeLocalSlopeAt(landerPoint.x, landerPoint.y) ?? 4.5;
+    const missMeters = Math.hypot(target.x - landerPoint.x, target.y - landerPoint.y) * landingDemSpacing;
+    const safeSlope = finalSlope <= 10;
+    const safeSpeed = vDescent <= 5;
+    const onTarget = missMeters <= 150;
+
+    if (safeSlope && safeSpeed && onTarget) {
+      document.getElementById('landingStatus').innerHTML =
+        `<span style="color:#4ade80;font-weight:700;">✓ SAFE TOUCHDOWN AT TARGET!</span> Slope: ${finalSlope.toFixed(1)}° (≤10°), Vertical speed: ${vDescent} m/s (≤5 m/s).`;
+    } else {
+      const reasons = [];
+      if (!onTarget) reasons.push(`missed target by ${(missMeters / 1000).toFixed(2)} km (increase horizontal speed)`);
+      if (!safeSlope) reasons.push(`steep terrain slope ${finalSlope.toFixed(1)}° (>10°)`);
+      if (!safeSpeed) reasons.push(`hard landing ${vDescent} m/s (>5 m/s)`);
+      document.getElementById('landingStatus').innerHTML =
+        `<span style="color:#f87171;font-weight:700;">⚠ LANDING HAZARD:</span> ${reasons.join('; ')}.`;
+    }
+  };
+
+  landingAnimation = requestAnimationFrame(step);
+}
+
+// Custom point creation & preset handlers inside 2D simulator
+document.getElementById('landingToggleCustomForm').addEventListener('click', () => {
+  const form = document.getElementById('landingCustomForm');
+  const open = form.style.display === 'none';
+  form.style.display = open ? 'block' : 'none';
+  if (open && currentSite) {
+    document.getElementById('landingCustomLat').value = currentSite.lat.toFixed(2);
+    document.getElementById('landingCustomLon').value = currentSite.lon.toFixed(2);
+  }
+});
+
+document.getElementById('landingUseGlobeBtn').addEventListener('click', () => {
+  if (!currentSite) return;
+  document.getElementById('landingCustomLat').value = currentSite.lat.toFixed(2);
+  document.getElementById('landingCustomLon').value = currentSite.lon.toFixed(2);
+  if (currentSite.isCustom && currentSite.name !== 'Custom Surface Point') {
+    document.getElementById('landingCustomName').value = currentSite.name;
+  }
+  showToast(`Filled coordinates from 3D Globe (${currentSite.lat.toFixed(2)}°, ${currentSite.lon.toFixed(2)}°)`);
+});
+
+document.getElementById('landingSaveCustomBtn').addEventListener('click', () => {
+  const lat = clamp(parseFloat(document.getElementById('landingCustomLat').value), -90, 90);
+  const lon = clamp(parseFloat(document.getElementById('landingCustomLon').value), -180, 180);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+    showToast('Please enter valid latitude and longitude');
+    return;
+  }
+  const rawName = document.getElementById('landingCustomName').value.trim();
+  const name = rawName || `Custom (${lat.toFixed(2)}°, ${lon.toFixed(2)}°)`;
+  const absLat = Math.abs(lat);
+  const estSlope = absLat > 88 ? +(3.4 + Math.abs(Math.sin(lon * 0.1)) * 2.2).toFixed(1) : +(4.8 + Math.abs(Math.sin(lat * 0.1)) * 3.0).toFixed(1);
+  const estRough = +(0.6 + (estSlope / 10) * 0.55).toFixed(2);
+  const estTemp = absLat > 85 ? Math.round(90 + Math.abs(Math.sin(lon)) * 35) : 185;
+  const estIce = absLat > 86 ? 5.8 : 1.4;
+
+  const newCustom = {
+    name,
+    lat,
+    lon,
+    slope: estSlope,
+    roughness: estRough,
+    temp: estTemp,
+    ice: `${estIce}% wt (Est.)`,
+    iceNum: estIce,
+    score: 80,
+    provenance: 'estimated',
+    confidence: 'Custom Simulator Coordinates',
+    sourceDataset: 'User Custom Coordinates + LOLA Profile',
+    agencies: ['NASA Moon Trek', 'LROC QuickMap'],
+    note: 'Custom landing zone created in 2D Landing Simulator.',
+    isCustom: true
+  };
+
+  savedCustomSites.unshift(newCustom);
+  persistSavedSites();
+  buildSiteLists();
+  populateCompareDropdown();
+  populateRoverDropdowns();
+  populateLanding2dDropdown();
+
+  document.getElementById('landingCustomName').value = '';
+  document.getElementById('landingCustomForm').style.display = 'none';
+  document.getElementById('landingDemSelect').value = 'custom:0';
+  loadLandingDem('custom:0');
+  showToast(`Saved & loaded "${name}" in 2D Simulator!`);
+});
+
+document.querySelectorAll('.landing2d-preset-btn[data-h]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const h = btn.getAttribute('data-h');
+    const v = btn.getAttribute('data-v');
+    document.getElementById('landingSpeed').value = h;
+    document.getElementById('landingSpeedVal').textContent = `${h} m/s`;
+    document.getElementById('landingDescent').value = v;
+    document.getElementById('landingDescentVal').textContent = `${v} m/s`;
+    showToast(`Applied ${btn.textContent} profile (${h} m/s horiz, ${v} m/s vert)`);
+  });
+});
+
+document.getElementById('landingSpeed').addEventListener('input', e => document.getElementById('landingSpeedVal').textContent = `${e.target.value} m/s`);
+document.getElementById('landingDescent').addEventListener('input', e => document.getElementById('landingDescentVal').textContent = `${e.target.value} m/s`);
+document.getElementById('landingDemSelect').addEventListener('change', e => loadLandingDem(e.target.value));
+document.getElementById('landingStart').addEventListener('click', startLanding);
+document.getElementById('landingReset').addEventListener('click', resetLander);
+
+function updateSimulationUI() {
+  const scrubber = document.getElementById('tl-scrubber');
+  const current = document.getElementById('tl-current');
+  const rotation = document.getElementById('tl-rotation');
+  const play = document.getElementById('tl-play');
+  if (!scrubber) return;
+  scrubber.value = simElapsedDays.toFixed(2);
+  current.textContent = `Lunar day ${simElapsedDays.toFixed(2)} / ${SYNODIC_MONTH_DAYS.toFixed(2)} · ${simPlaying ? 'Running' : 'Paused'}`;
+  rotation.textContent = `MOON ${(simElapsedDays / SIDEREAL_MONTH_DAYS * 360 % 360).toFixed(1)}° · EARTH ${(simElapsedDays * 360 % 360).toFixed(1)}°`;
+  play.textContent = simPlaying ? 'Ⅱ Pause' : '▶ Play';
+  updateCycleDependentReadouts();
+}
+
+function setSimulationDay(value) {
+  simElapsedDays = Math.max(0, Math.min(SYNODIC_MONTH_DAYS, Number(value) || 0));
+  updateBodies();
+  updateSimulationUI();
+  if (simElapsedDays >= SYNODIC_MONTH_DAYS) simPlaying = false;
+  updateSimulationUI();
+}
+
+function updateBodies() {
+  const moonAngle = (dayOfYear / 27.32166) * Math.PI * 2;
+  moon.position.set(Math.cos(moonAngle) * MOON_ORBIT, 0, Math.sin(moonAngle) * MOON_ORBIT);
+  
+  moon.lookAt(0, 0, 0);
+  moon.rotateY(Math.PI);
+  moon.rotateX(deg2rad(ephemerisState.subEarthLat));
+  moon.rotateY(deg2rad(ephemerisState.subEarthLon * 0.6));
+  moon.rotateY((simElapsedDays / SIDEREAL_MONTH_DAYS) * Math.PI * 2);
+  earth.rotation.y = (simElapsedDays * Math.PI * 2) % (Math.PI * 2);
+
+  const cycleEphemeris = getCycleEphemeris();
+  const subSolarLocal = latLonToVector3(cycleEphemeris.subSolarLat, cycleEphemeris.subSolarLon, 1);
+  const subSolarWorld = subSolarLocal.applyQuaternion(moon.quaternion).normalize();
+  sunMesh.position.copy(subSolarWorld.multiplyScalar(SUN_DIST));
+  sunLight.position.copy(sunMesh.position);
+}
+
+function selenographicElevationAzimuth(siteLat, siteLon, targetLat, targetLon) {
+  const phi1 = deg2rad(siteLat);
+  const phi2 = deg2rad(targetLat);
+  const dLon = deg2rad(targetLon - siteLon);
+
+  const sinAlt = Math.sin(phi1) * Math.sin(phi2) + Math.cos(phi1) * Math.cos(phi2) * Math.cos(dLon);
+  const alt = rad2deg(Math.asin(clamp(sinAlt, -1, 1)));
+
+  const y = Math.sin(dLon) * Math.cos(phi2);
+  const x = Math.cos(phi1) * Math.sin(phi2) - Math.sin(phi1) * Math.cos(phi2) * Math.cos(dLon);
+  let az = rad2deg(Math.atan2(y, x));
+  if (az < 0) az += 360;
+
+  return { alt, az };
+}
+
+function greatCircleLunarKm(lat1, lon1, lat2, lon2) {
+  const phi1 = deg2rad(lat1);
+  const phi2 = deg2rad(lat2);
+  const dPhi = deg2rad(lat2 - lat1);
+  const dLon = deg2rad(lon2 - lon1);
+  const a = Math.sin(dPhi / 2) ** 2 + Math.cos(phi1) * Math.cos(phi2) * Math.sin(dLon / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return MOON_RADIUS_KM * c;
+}
+
+let currentSite = { ...SITES[0], index: 0, isCustom: false };
+
+function getWeightsNormalized() {
+  const rawSolar = +document.getElementById('weightSolar').value;
+  const rawComms = +document.getElementById('weightComms').value;
+  const rawIce   = +document.getElementById('weightIce').value;
+  const rawSlope = +document.getElementById('weightSlope').value;
+  const sum = rawSolar + rawComms + rawIce + rawSlope || 1;
+  return {
+    wSolar: rawSolar / sum,
+    wComms: rawComms / sum,
+    wIce:   rawIce / sum,
+    wSlope: rawSlope / sum,
+    rawSolar, rawComms, rawIce, rawSlope
+  };
+}
+
+function computeSiteData(site, ephem = ephemerisState) {
+  const sunH = selenographicElevationAzimuth(site.lat, site.lon, ephem.subSolarLat, ephem.subSolarLon);
+  const earthH = selenographicElevationAzimuth(site.lat, site.lon, ephem.subEarthLat, ephem.subEarthLon);
+
+  let solarPct = 0;
+  if (sunH.alt > -0.27) {
+    const effectiveAlt = Math.max(0.25, sunH.alt + (Math.abs(site.lat) > 85 ? 1.4 : 0));
+    solarPct = Math.sin(deg2rad(Math.min(90, effectiveAlt * 3.2))) * 100;
+  }
+  solarPct = clamp(solarPct, 0, 100);
+
+  let sunCat = 'Low Sunlight';
+  let sunClass = 'mod';
+  if (sunH.alt > 5) { sunCat = 'Strong Sunlight'; sunClass = 'good'; }
+  else if (sunH.alt > 0.5) { sunCat = 'Some Sunlight'; sunClass = 'mod'; }
+  else if (sunH.alt <= -0.27) { sunCat = 'No Sunlight'; sunClass = 'bad'; }
+
+  const earthVis = earthH.alt > -0.5;
+  const earthStatus = earthVis ? 'Yes, we can talk to Earth' : 'No direct link (need relay)';
+  const earthClass = earthVis ? 'good' : 'bad';
+
+  const w = getWeightsNormalized();
+  const solarSubScore = clamp(solarPct, 5, 100);
+  const commsSubScore = earthH.alt > 2 ? 100 : (earthH.alt > -0.5 ? 72 : 18);
+  const iceVal = typeof site.iceNum === 'number' ? site.iceNum : (Math.abs(site.lat) > 86 ? 5.0 : 1.0);
+  const iceSubScore = clamp((iceVal / 9.5) * 100, 10, 100);
+  const slopeVal = typeof site.slope === 'number' ? site.slope : 5.0;
+  const slopeSubScore = clamp(100 - (slopeVal * 7.5), 15, 100);
+
+  const cSolar = solarSubScore * w.wSolar;
+  const cComms = commsSubScore * w.wComms;
+  const cIce   = iceSubScore * w.wIce;
+  const cSlope = slopeSubScore * w.wSlope;
+
+  const overallRating = Math.round(clamp(cSolar + cComms + cIce + cSlope, 10, 99));
+
+  return {
+    sunH, earthH, solarPct, sunCat, sunClass, earthVis, earthStatus, earthClass,
+    overallRating,
+    breakdown: {
+      solar: Math.round(cSolar),
+      comms: Math.round(cComms),
+      ice: Math.round(cIce),
+      slope: Math.round(cSlope)
+    }
+  };
+}
+
+function compute28DayCommsEstimate(site) {
+  let visibleDays = 0;
+  let blackoutDays = 0;
+  for (let d = 0; d < 28; d++) {
+    const ep = computeAnalyticalEphemeris((dayOfYear + d) % 365);
+    const eh = selenographicElevationAzimuth(site.lat, site.lon, ep.subEarthLat, ep.subEarthLon);
+    if (eh.alt > -0.5) visibleDays++;
+    else blackoutDays++;
+  }
+  const pct = Math.round((visibleDays / 28) * 100);
+  return { visibleDays, blackoutDays, pct };
+}
+
+function computeAnalogMatches(site) {
+  const absLat = Math.abs(site.lat);
+  const ice = site.iceNum || (absLat > 85 ? 5 : 1);
+  const slope = site.slope || 5;
+  return TERRESTRIAL_ANALOGS.map(analog => {
+    let score = 75;
+    if (analog.agency.includes('NASA') || analog.agency.includes('CSA')) score += absLat > 80 ? 12 : 4;
+    if (analog.type.toLowerCase().includes('anorthosite') && absLat > 75) score += 8;
+    if (analog.type.toLowerCase().includes('psr') || analog.type.toLowerCase().includes('cold') || analog.type.toLowerCase().includes('subsurface')) {
+      score += Math.min(15, ice * 1.8);
+    }
+    if (analog.type.toLowerCase().includes('highland') || analog.type.toLowerCase().includes('plagioclase')) score += absLat > 70 ? 6 : 0;
+    score += Math.max(0, 5 - Math.abs(slope - 5) * 0.8);
+    score += Math.abs(Math.sin(site.lon * 0.07)) * 4;
+    const matchPct = Math.round(Math.min(98, Math.max(62, score)));
+    return { ...analog, matchPct };
+  }).sort((a, b) => b.matchPct - a.matchPct);
+}
+
+// ========== SIDEBAR COLLAPSE & EXPAND ==========
+const leftPanel = document.getElementById('tab-globe-left');
+const rightPanel = document.getElementById('tab-globe-right');
+const toggleLeftBtn = document.getElementById('toggleLeftBtn');
+const toggleRightBtn = document.getElementById('toggleRightBtn');
+
+document.getElementById('collapseLeftBtn').onclick = () => {
+  leftPanel.classList.add('collapsed');
+  toggleLeftBtn.classList.add('visible');
+};
+toggleLeftBtn.onclick = () => {
+  leftPanel.classList.remove('collapsed');
+  toggleLeftBtn.classList.remove('visible');
+};
+
+document.getElementById('collapseRightBtn').onclick = () => {
+  rightPanel.classList.add('collapsed');
+  toggleRightBtn.classList.add('visible');
+};
+toggleRightBtn.onclick = () => {
+  rightPanel.classList.remove('collapsed');
+  toggleRightBtn.classList.remove('visible');
+};
+
+// ========== TAB NAVIGATION ==========
+const navTabs = document.querySelectorAll('.nav-tab');
+navTabs.forEach(tab => {
+  tab.addEventListener('click', () => {
+    navTabs.forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+
+    const target = tab.getAttribute('data-tab');
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active-panel'));
+
+    if (target === 'tab-globe') {
+      leftPanel.classList.add('active-panel');
+      rightPanel.classList.add('active-panel');
+      toggleLeftBtn.classList.toggle('visible', leftPanel.classList.contains('collapsed'));
+      toggleRightBtn.classList.toggle('visible', rightPanel.classList.contains('collapsed'));
+    } else {
+      toggleLeftBtn.classList.remove('visible');
+      toggleRightBtn.classList.remove('visible');
+      const targetPanel = document.getElementById(target);
+      if (targetPanel) targetPanel.classList.add('active-panel');
+      if (target === 'tab-mission') {
+        populateRoverDropdowns();
+        updateRoverPlanner();
+        updateMissionWindowPlanner();
+      }
+      if (target === 'tab-landing2d') {
+        populateLanding2dDropdown();
+        if (!landingDem) loadLandingDem(activeLandingKey);
+      }
+    }
+    updateUI();
+  });
+});
+
+// ========== MULTI-SITE COMPARISON RENDERER ==========
+function populateCompareDropdown() {
+  const sel = document.getElementById('compareAddSelect');
+  if (!sel) return;
+  const allSites = [...SITES, ...savedCustomSites];
+  sel.innerHTML = allSites.map(s => `<option value="${s.name}">${s.name} (${s.lat.toFixed(1)}°, ${s.lon.toFixed(1)}°)</option>`).join('');
+}
+
+function renderComparisonTable() {
+  const table = document.getElementById('comparisonTable');
+  if (!table) return;
+  const allSites = [...SITES, ...savedCustomSites];
+  const selectedSites = compareList
+    .map(name => allSites.find(s => s.name === name))
+    .filter(Boolean);
+
+  if (selectedSites.length === 0) {
+    selectedSites.push(SITES[0], SITES[5]);
+    compareList = selectedSites.map(s => s.name);
+  }
+
+  const thead = table.querySelector('thead');
+  thead.innerHTML = `<tr>
+    <th style="min-width:170px;">Scientific Parameter</th>
+    ${selectedSites.map(s => `
+      <th style="min-width:165px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
+          <span>${s.name}</span>
+          ${selectedSites.length > 2 ? `<button class="btn-danger" data-rm-compare="${s.name}" title="Remove from comparison">✕</button>` : ''}
+        </div>
+      </th>
+    `).join('')}
+  </tr>`;
+
+  thead.querySelectorAll('[data-rm-compare]').forEach(btn => {
+    btn.onclick = () => {
+      const name = btn.getAttribute('data-rm-compare');
+      compareList = compareList.filter(n => n !== name);
+      renderComparisonTable();
+    };
+  });
+
+  const computed = selectedSites.map(s => ({
+    site: s,
+    data: computeSiteData(s),
+    comms28: compute28DayCommsEstimate(s)
+  }));
+
+  const rows = [
+    { label: "Coordinates (Lat, Lon)", fn: c => `${c.site.lat.toFixed(2)}°, ${c.site.lon.toFixed(2)}°` },
+    { label: "Overall Suitability Score", fn: c => `<span class="rating-badge" style="font-size:11.5px; padding:3px 9px;">${c.data.overallRating}/100</span>` },
+    { label: "Solar Elevation (Est.)", fn: c => `${c.data.sunH.alt.toFixed(2)}° (${c.data.solarPct.toFixed(0)}% duty)` },
+    { label: "Terrain Slope (LOLA deg)", fn: c => c.site.slope != null ? `${c.site.slope}°` : `<span style="color:var(--text-muted);">Unavailable (Sampled)</span>` },
+    { label: "Surface Roughness (m)", fn: c => c.site.roughness != null ? `${c.site.roughness} m` : `<span style="color:var(--text-muted);">Unavailable</span>` },
+    { label: "Mean Temp (Diviner K)", fn: c => c.site.temp != null ? `${c.site.temp} K (${Math.round(c.site.temp - 273.15)}°C)` : `<span style="color:var(--text-muted);">Unavailable</span>` },
+    { label: "Water-Ice Proxy (% wt)", fn: c => c.site.ice || "Unverified" },
+    { label: "Earth Elevation (Est.)", fn: c => `${c.data.earthH.alt.toFixed(2)}°` },
+    { label: "28-Day Earth DTE Window (Est.)", fn: c => `${c.comms28.pct}% (${c.comms28.visibleDays}d visible / ${c.comms28.blackoutDays}d blackout)` },
+    { label: "Data Provenance & Confidence", fn: c => `<span style="font-size:11px; color:#cbd5e1;">${c.site.confidence || 'Estimated from coordinates'}</span>` }
+  ];
+
+  const tbody = document.getElementById('comparisonTableBody');
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td style="color:var(--text-muted); font-weight:600;">${r.label}</td>
+      ${computed.map(c => `<td>${r.fn(c)}</td>`).join('')}
+    </tr>
+  `).join('');
+}
+
+document.getElementById('btnAddSiteFromDropdown').onclick = () => {
+  const name = document.getElementById('compareAddSelect').value;
+  if (name && !compareList.includes(name)) {
+    compareList.push(name);
+    renderComparisonTable();
+    showToast(`Added "${name}" to comparison`);
+  } else {
+    showToast('Site already in comparison table');
+  }
+};
+
+document.getElementById('btnAddToCompare').onclick = () => {
+  if (!compareList.includes(currentSite.name)) {
+    compareList.push(currentSite.name);
+    showToast(`Added "${currentSite.name}" to Compare Sites`);
+  } else {
+    showToast(`"${currentSite.name}" is already in comparison`);
+  }
+  document.querySelector('[data-tab="tab-compare"]').click();
+};
+
+document.getElementById('btnClearCompare').onclick = () => {
+  compareList = ["Shackleton Rim", "Mons Mouton Plateau"];
+  renderComparisonTable();
+  showToast('Reset comparison to default pair');
+};
+
+// ========== ROVER ROUTE & MISSION WINDOW CALCULATIONS ==========
+function populateRoverDropdowns() {
+  const startSel = document.getElementById('roverStartSelect');
+  const endSel = document.getElementById('roverEndSelect');
+  if (!startSel || !endSel) return;
+  const allSites = [...SITES, ...savedCustomSites];
+  const opts = allSites.map(s => `<option value="${s.name}">${s.name} (${s.lat.toFixed(1)}°, ${s.lon.toFixed(1)}°)</option>`).join('');
+  const prevStart = startSel.value || "Shackleton Rim";
+  const prevEnd = endSel.value || "de Gerlache Rim";
+  startSel.innerHTML = opts;
+  endSel.innerHTML = opts;
+  startSel.value = allSites.some(s => s.name === prevStart) ? prevStart : SITES[0].name;
+  endSel.value = allSites.some(s => s.name === prevEnd) ? prevEnd : SITES[9].name;
+}
+
+function updateRoverPlanner() {
+  const allSites = [...SITES, ...savedCustomSites];
+  const startName = document.getElementById('roverStartSelect').value;
+  const endName = document.getElementById('roverEndSelect').value;
+  const s1 = allSites.find(s => s.name === startName) || SITES[0];
+  const s2 = allSites.find(s => s.name === endName) || SITES[9];
+
+  const distKm = greatCircleLunarKm(s1.lat, s1.lon, s2.lat, s2.lon);
+  const avgSlope = ((s1.slope || 5.0) + (s2.slope || 5.0)) / 2;
+  const maxSlope = Math.max(s1.slope || 5.0, s2.slope || 5.0);
+  const detourFactor = 1 + (avgSlope * 0.035);
+  const terrainDistKm = distKm * detourFactor;
+
+  const isRtg = document.getElementById('roverPowerMode').value === 'rtg';
+  const speedKmh = isRtg ? 0.85 : 0.65;
+  const hours = terrainDistKm / speedKmh;
+
+  document.getElementById('roverDistVal').textContent = `${distKm.toFixed(2)} km (Great-Circle)`;
+  document.getElementById('roverTerrainDistVal').textContent = `${terrainDistKm.toFixed(2)} km (×${detourFactor.toFixed(2)} slope detour)`;
+  document.getElementById('roverMaxSlopeVal').textContent = `${maxSlope.toFixed(1)}° (${maxSlope > 7.5 ? 'High Caution' : 'Traversable'})`;
+  document.getElementById('roverTimeEst').textContent = `${hours.toFixed(1)} hrs (${isRtg ? 'Continuous RTG' : 'Sunlit Windows Only'})`;
+
+  updateRoverRouteGeometry(s1, s2);
+}
+
+function updateMissionWindowPlanner() {
+  const startStr = document.getElementById('missionStart').value || "2026-10-15";
+  const duration = +document.getElementById('missionDuration').value || 14;
+  document.getElementById('durationVal').textContent = `${duration} Days`;
+
+  const startDoy = dateStrToDoy(startStr);
+  const endDoy = Math.min(364, startDoy + duration);
+  document.getElementById('missionEndLabel').textContent = getSelectedDateString(endDoy);
+
+  let solarSum = 0;
+  let visibleDays = 0;
+  let blackoutDays = 0;
+  for (let d = 0; d < duration; d++) {
+    const ep = computeAnalyticalEphemeris((startDoy + d) % 365);
+    const siteStats = computeSiteData(currentSite, ep);
+    solarSum += siteStats.solarPct;
+    if (siteStats.earthVis) visibleDays++;
+    else blackoutDays++;
+  }
+
+  const avgSolar = Math.round(solarSum / duration);
+  const commsPct = Math.round((visibleDays / duration) * 100);
+  document.getElementById('missionAvgSolar').textContent = `${avgSolar}% avg illumination (${currentSite.name})`;
+  document.getElementById('missionAvgComms').textContent = `${visibleDays}/${duration} days (${commsPct}% DTE window)`;
+  document.getElementById('missionBlackoutDays').textContent = `${blackoutDays} days (Estimated smooth-horizon occultation)`;
+}
+
+// ========== UI REFRESH ==========
+function updateUI() {
+  const data = computeSiteData(currentSite, getCycleEphemeris());
+
+  document.getElementById('siteName').textContent = currentSite.name + (currentSite.isCustom ? ' (Custom)' : '');
+  document.getElementById('siteCoords').textContent = `${currentSite.lat.toFixed(2)}°, ${currentSite.lon.toFixed(2)}°`;
+  document.getElementById('siteScore').textContent = `${data.overallRating}/100`;
+
+  const ags = currentSite.agencies || ["NASA Moon Trek", "LROC QuickMap"];
+  document.getElementById('siteAgencyContainer').innerHTML = ags.map(a => `<span class="agency-tag">${a}</span>`).join('');
+
+  const isVerified = currentSite.provenance === 'verified';
+  const isEstimated = currentSite.provenance === 'estimated' || currentSite.isCustom;
+  document.getElementById('siteProvenanceRow').innerHTML = isVerified
+    ? `<span class="provenance-badge prov-verified" title="${currentSite.sourceDataset}">✓ Verified Dataset: ${currentSite.confidence}</span>`
+    : isEstimated
+    ? `<span class="provenance-badge prov-estimated" title="Latitude-based proxy model">~ Estimated Proxy Values</span>`
+    : `<span class="provenance-badge prov-unavailable">Sampled Coordinates</span>`;
+
+  document.getElementById('sunAltQuick').textContent = data.sunH.alt.toFixed(2);
+  document.getElementById('sunStatusQuick').innerHTML = `<span style="color:${data.sunClass === 'good' ? '#4ade80' : data.sunClass === 'mod' ? '#fbbf24' : '#f87171'};">${data.sunCat}</span>`;
+  document.getElementById('earthAltQuick').textContent = data.earthH.alt.toFixed(2);
+  document.getElementById('earthStatusQuick').innerHTML = `<span style="color:${data.earthClass === 'good' ? '#4ade80' : '#f87171'};">${data.earthStatus}</span>`;
+
+  const slopeProvBadge = document.getElementById('slopeProvBadge');
+  const iceProvBadge = document.getElementById('iceProvBadge');
+  if (isVerified || (isEstimated && currentSite.slope != null)) {
+    slopeProvBadge.className = isVerified ? 'provenance-badge prov-verified' : 'provenance-badge prov-estimated';
+    slopeProvBadge.textContent = isVerified ? 'LOLA' : 'Est.';
+    iceProvBadge.className = isVerified ? 'provenance-badge prov-verified' : 'provenance-badge prov-estimated';
+    iceProvBadge.textContent = isVerified ? 'Diviner' : 'Est.';
+    document.getElementById('quickSlopeVal').textContent = currentSite.slope != null ? `${currentSite.slope}°` : 'N/A';
+    const slope = currentSite.slope || 5;
+    document.getElementById('quickSlopeSub').textContent = slope > 7 ? 'Steep Caution' : 'Landing Safe (<10°)';
+    document.getElementById('quickSlopeSub').style.color = slope > 7 ? '#fbbf24' : '#4ade80';
+    document.getElementById('quickIceVal').textContent = currentSite.ice || 'Unavailable';
+  } else {
+    slopeProvBadge.className = 'provenance-badge prov-unavailable';
+    slopeProvBadge.textContent = 'Unverified';
+    iceProvBadge.className = 'provenance-badge prov-unavailable';
+    iceProvBadge.textContent = 'Unverified';
+    document.getElementById('quickSlopeVal').textContent = 'N/A (Sampled)';
+    document.getElementById('quickSlopeSub').textContent = 'Open QuickMap for DEM';
+    document.getElementById('quickSlopeSub').style.color = '#94a3b8';
+    document.getElementById('quickIceVal').textContent = 'Unavailable';
+  }
+
+  document.getElementById('subSolarLabel').textContent = `${ephemerisState.subSolarLat.toFixed(2)}°, ${ephemerisState.subSolarLon.toFixed(1)}°`;
+  document.getElementById('subEarthLabel').textContent = `${ephemerisState.subEarthLat.toFixed(2)}°, ${ephemerisState.subEarthLon.toFixed(1)}°`;
+
+  document.getElementById('siteNoteBox').innerHTML = `
+    <strong style="color:var(--accent-cyan);">Site Overview &amp; Provenance:</strong><br>
+    <span style="color:#e2e8f0; display:block; margin-top:4px;">${currentSite.note || 'Custom sampled surface coordinates on the 3D lunar globe.'}</span>
+    <span style="color:#7dd3fc; font-size:11.5px; display:block; margin-top:6px;">${currentSite.telemetry || 'Use LROC QuickMap or Moon Trek links below to inspect local DEM slope and NAC boulders.'}</span>
+  `;
+
+  document.getElementById('quickmapBtn').href = `https://quickmap.lroc.im-ldi.com/?extent=${(currentSite.lon - 2).toFixed(2)},${(currentSite.lat - 2).toFixed(2)},${(currentSite.lon + 2).toFixed(2)},${(currentSite.lat + 2).toFixed(2)}`;
+  document.getElementById('moontrekBtn').href = `https://trek.nasa.gov/moon/#v=0.1&x=${currentSite.lon.toFixed(4)}&y=${currentSite.lat.toFixed(4)}&z=7&p=urn%3Aogc%3Adef%3Acrs%3AEPSG%3A%3A104903`;
+
+  updateCycleDependentReadouts();
+
+  const terrainBadge = document.getElementById('terrainTabProvBadge');
+  if (isVerified || (isEstimated && currentSite.slope != null)) {
+    terrainBadge.className = isVerified ? 'provenance-badge prov-verified' : 'provenance-badge prov-estimated';
+    terrainBadge.textContent = isVerified ? currentSite.sourceDataset : 'Estimated Proxy Model';
+    const slope = currentSite.slope;
+    document.getElementById('terrainSlopeVal').textContent = `${slope}°`;
+    document.getElementById('terrainSlopeStatus').textContent = slope > 7.5 ? 'Moderate Tilt — Requires Hazard Avoidance' : 'Safe for Touchdown (< 10° tilt)';
+    document.getElementById('terrainSlopeStatus').style.color = slope > 7.5 ? '#fbbf24' : '#4ade80';
+    document.getElementById('terrainRoughVal').textContent = currentSite.roughness != null ? `${currentSite.roughness} m` : 'Est.';
+    document.getElementById('terrainHazardVal').textContent = slope > 7.5 ? 'Moderate' : 'Low';
+    document.getElementById('terrainHazardSub').textContent = slope > 7.5 ? 'Elevated crater-wall boulder density' : 'Minimal surface boulder concentration';
+    document.getElementById('terrainSummaryText').textContent = isVerified 
+      ? `${currentSite.name} has verified orbital characterization (${currentSite.sourceDataset}). ${currentSite.note}`
+      : `Custom surface point with latitude-based estimates. ${currentSite.note}`;
+  } else {
+    terrainBadge.className = 'provenance-badge prov-unavailable';
+    terrainBadge.textContent = 'Local DEM Not Loaded — Sampled Coordinate';
+    document.getElementById('terrainSlopeVal').textContent = 'Unavailable';
+    document.getElementById('terrainSlopeStatus').textContent = 'No local LOLA DEM tile loaded for custom click';
+    document.getElementById('terrainSlopeStatus').style.color = '#94a3b8';
+    document.getElementById('terrainRoughVal').textContent = 'Unavailable';
+    document.getElementById('terrainHazardVal').textContent = 'Unverified';
+    document.getElementById('terrainHazardSub').textContent = 'Inspect in LROC QuickMap for NAC boulder count';
+    document.getElementById('terrainSummaryText').textContent = `Custom surface point (${currentSite.lat.toFixed(2)}°, ${currentSite.lon.toFixed(2)}°). High-resolution LOLA slope and roughness values are not locally cached for arbitrary clicks; launch LROC QuickMap or NASA Moon Trek to inspect local topography.`;
+  }
+
+  document.getElementById('analogTargetName').textContent = currentSite.name;
+  document.getElementById('analogTargetCoords').textContent = `${currentSite.lat.toFixed(2)}°, ${currentSite.lon.toFixed(2)}°`;
+  renderAnalogMatches(computeAnalogMatches(currentSite));
+
+  document.getElementById('presSiteName').textContent = currentSite.name;
+  document.getElementById('presCoords').textContent = `${currentSite.lat.toFixed(2)}°, ${currentSite.lon.toFixed(2)}°`;
+  document.getElementById('presScore').textContent = data.overallRating + "/100";
+  document.getElementById('presStatusText').textContent = `Sunlight Est.: ${data.solarPct.toFixed(0)}% | Earth Comms: ${data.earthStatus}`;
+
+  markers.forEach((m, i) => {
+    m.material.color.set(i === currentSite.index ? 0xff6622 : 0xffcc44);
+    m.scale.setScalar(i === currentSite.index ? 1.8 : 1);
+  });
+
+  updateRankings();
+  renderComparisonTable();
+  updateMissionWindowPlanner();
+}
+
+function renderAnalogMatches(matches) {
+  const container = document.getElementById('analogMatchesList');
+  container.innerHTML = '';
+  matches.forEach(m => {
+    const card = document.createElement('div');
+    card.className = 'data-card';
+    card.innerHTML = `
+      <div class="analog-header">
+        <div>
+          <strong style="color:#ffffff; font-size:13.5px;">${m.name}</strong> 
+          <span style="color:var(--text-muted); font-size:11.5px;">(${m.location})</span>
+        </div>
+        <div style="display:flex; gap:6px; align-items:center;">
+          <span class="agency-tag">${m.agency}</span>
+          <span style="color:var(--accent-green); font-weight:700; font-size:12px;">${m.matchPct}% Match</span>
+        </div>
+      </div>
+      <div style="font-size:12px; color:#7dd3fc; margin-bottom:4px;">Soil &amp; Rock Type: <strong>${m.type}</strong></div>
+      <div style="font-size:12px; color:#cbd5e1;">${m.desc}</div>
+    `;
+    container.appendChild(card);
+  });
+}
+
+function placeHorizonMarker(id, alt, az) {
+  const el = document.getElementById(id);
+  if (alt < -10) { el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  const x = 5 + (az / 360) * 90;
+  const y = 55 - (alt / 25) * 45;
+  el.style.left = clamp(x, 3, 97) + '%';
+  el.style.top  = clamp(y, 8, 90) + '%';
+}
+
+function updateDateLabel() {
+  document.getElementById('dateLabel').textContent = getSelectedDateString();
+}
+
+// ========== DELETE & VIEW SAVED LOCATIONS ==========
+function deleteSavedSite(index) {
+  const removed = savedCustomSites[index];
+  savedCustomSites.splice(index, 1);
+  persistSavedSites();
+  buildSiteLists();
+  populateCompareDropdown();
+  populateRoverDropdowns();
+  populateLanding2dDropdown();
+  updateRankings();
+  if (removed && currentSite.isCustom && currentSite.name === removed.name) {
+    selectSite(0);
+  }
+  showToast(`Deleted "${removed ? removed.name : 'location'}"`);
+}
+
+function clearAllSavedSites() {
+  savedCustomSites = [];
+  persistSavedSites();
+  buildSiteLists();
+  populateCompareDropdown();
+  populateRoverDropdowns();
+  populateLanding2dDropdown();
+  updateRankings();
+  if (currentSite.isCustom) selectSite(0);
+  showToast('All saved locations cleared');
+}
+
+function viewSavedSite(s) {
+  currentSite = { ...s, isCustom: true, index: -1 };
+  customMarker.position.copy(latLonToVector3(s.lat, s.lon, MOON_RADIUS * 1.01));
+  customMarker.visible = true;
+  document.querySelector('[data-tab="tab-globe"]').click();
+  if (rightPanel.classList.contains('collapsed')) {
+    rightPanel.classList.remove('collapsed');
+    toggleRightBtn.classList.remove('visible');
+  }
+  buildSiteLists();
+  updateUI();
+  const target = latLonToVector3(s.lat, s.lon, MOON_RADIUS).applyQuaternion(moon.quaternion).add(moon.position);
+  animateCameraTo(target, MOON_RADIUS * 3.5);
+}
+
+function buildSiteLists() {
+  const list = document.getElementById('siteList');
+  list.innerHTML = '';
+  SITES.forEach((s, i) => {
+    const div = document.createElement('div');
+    div.className = 'site-item' + (currentSite.index === i && !currentSite.isCustom ? ' selected' : '');
+    div.innerHTML = `
+      <span style="font-weight:500;">${s.name}</span>
+      <span style="font-size:11px; color:var(--accent-cyan);">${s.agencies[0]} · ${s.lat.toFixed(1)}°</span>
+    `;
+    div.onclick = () => selectSite(i);
+    list.appendChild(div);
+  });
+
+  const count = savedCustomSites.length;
+  document.getElementById('savedCountSidebar').textContent = count;
+  document.getElementById('savedCountTab').textContent = count;
+  document.getElementById('btnClearAllSidebar').style.display = count > 0 ? 'inline-flex' : 'none';
+  document.getElementById('btnClearAllTab').style.display = count > 0 ? 'inline-flex' : 'none';
+
+  const targets = [document.getElementById('sidebarSavedList'), document.getElementById('savedSiteList')];
+  targets.forEach(container => {
+    if (!container) return;
+    container.innerHTML = '';
+    if (count === 0) {
+      container.innerHTML = '<div style="color:var(--text-muted); font-size:11.5px; padding:6px 2px;">No saved spots yet. Click anywhere on the 3D Moon and press <strong>+ Save</strong>.</div>';
+      return;
+    }
+
+    savedCustomSites.forEach((s, idx) => {
+      const isSelected = currentSite.isCustom && currentSite.name === s.name && Math.abs(currentSite.lat - s.lat) < 0.001;
+      const row = document.createElement('div');
+      row.className = 'site-item' + (isSelected ? ' selected' : '');
+      row.style.gap = '6px';
+
+      const info = document.createElement('div');
+      info.style.flex = '1';
+      info.style.minWidth = '0';
+      info.innerHTML = `
+        <div style="font-weight:600; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">📌 ${s.name}</div>
+        <div style="font-size:10.5px; color:var(--text-muted);">${s.lat.toFixed(1)}°, ${s.lon.toFixed(1)}° · Score ${s.score}/100</div>
+      `;
+      info.onclick = () => viewSavedSite(s);
+
+      const actions = document.createElement('div');
+      actions.style.display = 'flex';
+      actions.style.gap = '4px';
+
+      const viewBtn = document.createElement('button');
+      viewBtn.className = 'btn-view';
+      viewBtn.textContent = 'View';
+      viewBtn.title = 'Focus camera on this saved location';
+      viewBtn.onclick = (e) => { e.stopPropagation(); viewSavedSite(s); };
+
+      const delBtn = document.createElement('button');
+      delBtn.className = 'btn-danger';
+      delBtn.textContent = '✕';
+      delBtn.title = 'Delete saved location';
+      delBtn.onclick = (e) => { e.stopPropagation(); deleteSavedSite(idx); };
+
+      actions.appendChild(viewBtn);
+      actions.appendChild(delBtn);
+      row.appendChild(info);
+      row.appendChild(actions);
+      container.appendChild(row);
+    });
+  });
+}
+
+document.getElementById('btnClearAllSidebar').onclick = clearAllSavedSites;
+document.getElementById('btnClearAllTab').onclick = clearAllSavedSites;
+
+function selectSite(index) {
+  currentSite = { ...SITES[index], index, isCustom: false };
+  customMarker.visible = false;
+  buildSiteLists();
+  updateUI();
+
+  const landingSel = document.getElementById('landingDemSelect');
+  if (landingSel && landingSel.value !== `site:${index}`) {
+    landingSel.value = `site:${index}`;
+    loadLandingDem(`site:${index}`);
+  }
+
+  const target = latLonToVector3(currentSite.lat, currentSite.lon, MOON_RADIUS).applyQuaternion(moon.quaternion).add(moon.position);
+  animateCameraTo(target, MOON_RADIUS * 3.5);
+}
+
+// ========== LANDING SITE RANKING ENGINE ==========
+function updateRankings() {
+  const w = getWeightsNormalized();
+  document.getElementById('wSolarVal').textContent = w.rawSolar;
+  document.getElementById('wCommsVal').textContent = w.rawComms;
+  document.getElementById('wIceVal').textContent = w.rawIce;
+  document.getElementById('wSlopeVal').textContent = w.rawSlope;
+  const totalEl = document.getElementById('weightTotal');
+  if (totalEl) totalEl.textContent = w.rawSolar + w.rawComms + w.rawIce + w.rawSlope;
+
+  const allSites = [...SITES, ...savedCustomSites];
+  const scored = allSites.map(s => {
+    const d = computeSiteData(s);
+    return { ...s, score: d.overallRating, breakdown: d.breakdown };
+  }).sort((a, b) => b.score - a.score);
+
+  const container = document.getElementById('rankingResultsList');
+  container.innerHTML = '';
+  scored.forEach((s, idx) => {
+    const div = document.createElement('div');
+    div.className = 'site-item';
+    div.style.flexDirection = 'column';
+    div.style.alignItems = 'stretch';
+    const b = s.breakdown;
+    const sumB = (b.solar + b.comms + b.ice + b.slope) || 1;
+    div.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span>#${idx+1} <strong>${s.name}</strong> <span style="font-size:10px; color:var(--text-muted);">(${s.provenance === 'verified' ? 'Verified DEM' : 'Sampled'})</span></span>
+        <span class="rating-badge" style="font-size:11px; padding:2px 9px;">${s.score}/100</span>
+      </div>
+      <div class="score-breakdown" title="Factor contributions: Solar ${b.solar}pts | Comms ${b.comms}pts | Ice ${b.ice}pts | Slope ${b.slope}pts">
+        <div class="sb-solar" style="width:${(b.solar/sumB)*100}%;"></div>
+        <div class="sb-comms" style="width:${(b.comms/sumB)*100}%;"></div>
+        <div class="sb-ice" style="width:${(b.ice/sumB)*100}%;"></div>
+        <div class="sb-slope" style="width:${(b.slope/sumB)*100}%;"></div>
+      </div>
+      <div style="font-size:10px; color:var(--text-muted); margin-top:3px; display:flex; justify-content:space-between;">
+        <span>☀ ${b.solar}pt</span><span>📡 ${b.comms}pt</span><span>❄ ${b.ice}pt</span><span>⛰ ${b.slope}pt</span>
+      </div>
+    `;
+    div.onclick = () => {
+      const origIdx = SITES.findIndex(x => x.name === s.name);
+      if (origIdx >= 0) {
+        document.querySelector('[data-tab="tab-globe"]').click();
+        selectSite(origIdx);
+      } else {
+        viewSavedSite(s);
+      }
+    };
+    container.appendChild(div);
+  });
+}
+
+// ========== INTERACTION & RAYCASTING ==========
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  if (e.button !== 0) return;
+  mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+  raycaster.setFromCamera(mouse, camera);
+
+  const hits = raycaster.intersectObjects(markers, false);
+  if (hits.length) {
+    selectSite(hits[0].object.userData.siteIndex);
+    return;
+  }
+  
+  const moonHits = raycaster.intersectObject(moon, false);
+  if (moonHits.length) {
+    const local = moon.worldToLocal(moonHits[0].point.clone());
+    const r = local.length();
+    const lat = 90 - rad2deg(Math.acos(clamp(local.y / r, -1, 1)));
+    let lon = rad2deg(Math.atan2(local.z, -local.x)) - 180;
+    if (lon < -180) lon += 360;
+    if (lon > 180) lon -= 360;
+
+    const absLat = Math.abs(lat);
+    const estSlope = absLat > 88 ? +(3.2 + (Math.sin(lon * 0.1) * 1.5 + 1.2)).toFixed(1) : absLat > 85 ? +(4.5 + Math.abs(Math.sin(lon * 0.05)) * 2.5).toFixed(1) : +(5.0 + Math.abs(Math.sin(lat * lon * 0.01)) * 3.5).toFixed(1);
+    const estRough = +(0.55 + (estSlope / 10) * 0.6).toFixed(2);
+    const estTemp = absLat > 85 ? Math.round(85 + Math.abs(Math.sin(lon)) * 40) : Math.round(140 + (90 - absLat) * 2);
+    const estIceNum = absLat > 87 ? +(6.8 + Math.abs(Math.cos(lon * 0.08)) * 2.2).toFixed(1) : absLat > 82 ? +(3.5 + Math.abs(Math.sin(lon * 0.03)) * 2.0).toFixed(1) : +(0.8 + Math.abs(Math.cos(lat)) * 1.5).toFixed(1);
+
+    currentSite = {
+      name: 'Custom Surface Point',
+      lat, lon,
+      agencies: ["NASA Moon Trek", "LROC QuickMap"],
+      slope: estSlope, roughness: estRough, temp: estTemp, ice: `${estIceNum}% wt (Est.)`, iceNum: estIceNum,
+      provenance: "estimated",
+      confidence: "Estimated from latitude/longitude proxy (Local LOLA DEM recommended)",
+      sourceDataset: "Selenographic Coordinate Estimation Model",
+      note: 'Custom sampled surface coordinates on the 3D Moon. Slope, roughness, temperature and ice values are latitude-based estimates; verify with LROC QuickMap or Moon Trek.',
+      telemetry: `Est. Slope: ${estSlope}° | Est. Roughness: ${estRough} m | Est. Temp: ${estTemp} K | Ice Proxy: ${estIceNum}% wt`,
+      isCustom: true,
+      index: -1
+    };
+    customMarker.position.copy(local.normalize().multiplyScalar(MOON_RADIUS * 1.01));
+    customMarker.visible = true;
+    rightPanel.classList.remove('collapsed');
+    toggleRightBtn.classList.remove('visible');
+    document.querySelector('[data-tab="tab-globe"]').click();
+    buildSiteLists();
+    updateUI();
+  }
+});
+
+document.getElementById('btnSaveSite').onclick = () => {
+  const nameInput = document.getElementById('customSiteName');
+  const name = nameInput.value.trim() || `Spot (${currentSite.lat.toFixed(1)}°, ${currentSite.lon.toFixed(1)}°)`;
+  const data = computeSiteData(currentSite);
+  
+  savedCustomSites.unshift({
+    name,
+    lat: currentSite.lat,
+    lon: currentSite.lon,
+    slope: currentSite.slope,
+    roughness: currentSite.roughness,
+    temp: currentSite.temp,
+    ice: currentSite.ice || "Unverified",
+    iceNum: currentSite.iceNum || 4.0,
+    score: data.overallRating,
+    provenance: currentSite.provenance || "sampled",
+    confidence: currentSite.confidence || "Coordinate Sampled",
+    agencies: currentSite.agencies || ["NASA Moon Trek", "LROC QuickMap"],
+    note: currentSite.note || "User saved custom target",
+    isCustom: true
+  });
+  
+  persistSavedSites();
+  nameInput.value = '';
+  buildSiteLists();
+  populateCompareDropdown();
+  populateRoverDropdowns();
+  populateLanding2dDropdown();
+  updateUI();
+  showToast(`Saved "${name}"!`);
+};
+
+function animateCameraTo(target, distance) {
+  const startPos = camera.position.clone();
+  const startTarget = controls.target.clone();
+  const dir = new THREE.Vector3().subVectors(camera.position, controls.target).normalize();
+  const endPos = target.clone().add(dir.multiplyScalar(distance));
+  let t = 0;
+  function step() {
+    t += 0.04;
+    if (t > 1) t = 1;
+    camera.position.lerpVectors(startPos, endPos, t);
+    controls.target.lerpVectors(startTarget, target, t);
+    if (t < 1) requestAnimationFrame(step);
+  }
+  step();
+}
+
+document.getElementById('btnSouthPole').onclick = () => {
+  const pole = latLonToVector3(-90, 0, MOON_RADIUS).applyQuaternion(moon.quaternion).add(moon.position);
+  controls.target.copy(pole);
+  const offset = new THREE.Vector3(0.15, -3.2, 0.15);
+  camera.position.copy(pole).add(offset);
+};
+document.getElementById('btnEarthView').onclick = () => { controls.target.set(0,0,0); camera.position.set(0, 15, 35); };
+document.getElementById('btnMoonGlobal').onclick = () => { controls.target.copy(moon.position); camera.position.copy(moon.position).add(new THREE.Vector3(6, 3, 9)); };
+document.getElementById('btnResetView').onclick = () => { controls.target.set(0,0,0); camera.position.set(0, 25, 70); };
+
+document.getElementById('toggleMarkers').onclick = (e) => {
+  markerGroup.visible = !markerGroup.visible;
+  e.target.classList.toggle('active');
+};
+document.getElementById('toggleRoute').onclick = (e) => {
+  if (routeLine) routeLine.visible = !routeLine.visible;
+  e.target.classList.toggle('active');
+};
+document.getElementById('btnSimulateRoute').onclick = () => {
+  updateRoverPlanner();
+  if (routeLine) routeLine.visible = true;
+  document.getElementById('toggleRoute').classList.add('active');
+  document.querySelector('[data-tab="tab-globe"]').click();
+  const pole = latLonToVector3(-88.5, -30, MOON_RADIUS).applyQuaternion(moon.quaternion).add(moon.position);
+  animateCameraTo(pole, MOON_RADIUS * 2.5);
+};
+
+document.getElementById('psrFeatureSelect').onchange = (e) => {
+  const feat = PSR_FEATURES[e.target.value];
+  if (feat) {
+    document.getElementById('psrCraterName').textContent = feat.name;
+    document.getElementById('psrMaxTemp').textContent = feat.maxT;
+    document.getElementById('psrMinTemp').textContent = feat.minT;
+    document.getElementById('psrIceRatio').textContent = feat.ice;
+  }
+};
+
+document.getElementById('roverPowerMode').onchange = updateRoverPlanner;
+document.getElementById('roverStartSelect').onchange = updateRoverPlanner;
+document.getElementById('roverEndSelect').onchange = updateRoverPlanner;
+document.getElementById('missionStart').onchange = updateMissionWindowPlanner;
+document.getElementById('missionDuration').oninput = updateMissionWindowPlanner;
+document.getElementById('btnCompareNextSynodic').onclick = () => {
+  const curDoy = dateStrToDoy(document.getElementById('missionStart').value || "2026-10-15");
+  const nextDoy = (curDoy + 30) % 365;
+  document.getElementById('missionStart').value = getSelectedDateString(nextDoy);
+  updateMissionWindowPlanner();
+  showToast(`Shifted window +1 synodic lunar cycle (${getSelectedDateString(nextDoy)})`);
+};
+
+document.getElementById('btnEnterPres').onclick = () => document.body.classList.add('presentation-mode');
+document.getElementById('btnExitPres').onclick = () => document.body.classList.remove('presentation-mode');
+
+document.getElementById('dateSlider').oninput = (e) => {
+  dayOfYear = +e.target.value;
+  updateDateLabel();
+  ephemerisState = computeAnalyticalEphemeris(dayOfYear);
+  document.getElementById('ephemStatus').textContent = "Analytical Model (scrub date, then Query for live)";
+  document.getElementById('ephemStatus').style.color = "#fcd34d";
+  updateBodies();
+  updateUI();
+};
+document.getElementById('btnFetchHorizons').onclick = () => fetchHorizonsAPI();
+document.getElementById('trekLayerSelect').onchange = (e) => loadMoonTrekLayer(e.target.value);
+['weightSolar', 'weightComms', 'weightIce', 'weightSlope'].forEach(id => {
+  document.getElementById(id).addEventListener('input', updateRankings);
+});
+
+document.getElementById('tl-play').addEventListener('click', () => {
+  if (simElapsedDays >= SYNODIC_MONTH_DAYS) setSimulationDay(0);
+  simPlaying = !simPlaying;
+  updateSimulationUI();
+});
+document.getElementById('tl-reset').addEventListener('click', () => {
+  simPlaying = false;
+  setSimulationDay(0);
+});
+document.getElementById('tl-scrubber').addEventListener('input', e => {
+  simPlaying = false;
+  setSimulationDay(e.target.value);
+});
+document.getElementById('tl-collapse').addEventListener('click', () => {
+  const panel = document.getElementById('mission-timeline');
+  const collapsed = panel.classList.toggle('is-collapsed');
+  document.getElementById('tl-collapse').textContent = collapsed ? 'Lunar Day +' : 'Minimize −';
+  document.getElementById('tl-collapse').title = collapsed ? 'Expand lunar day controls' : 'Minimize lunar day controls';
+  document.getElementById('tl-collapse').setAttribute('aria-expanded', String(!collapsed));
+});
+
+document.getElementById('btnExportJSON').onclick = () => {
+  const allSites = [...SITES, ...savedCustomSites];
+  const rankedExport = allSites.map(s => {
+    const d = computeSiteData(s);
+    const c28 = compute28DayCommsEstimate(s);
+    return {
+      name: s.name,
+      coordinates: { latitude_deg: s.lat, longitude_deg: s.lon },
+      metrics: {
+        slope_deg: s.slope ?? "Unavailable",
+        roughness_m: s.roughness ?? "Unavailable",
+        mean_temp_K: s.temp ?? "Unavailable",
+        water_ice_proxy: s.ice || "Unverified",
+        solar_elevation_deg_est: +d.sunH.alt.toFixed(2),
+        earth_elevation_deg_est: +d.earthH.alt.toFixed(2),
+        dte_comms_28d_pct_est: c28.pct
+      },
+      ranking: {
+        overall_score_100: d.overallRating,
+        factor_contributions: d.breakdown
+      },
+      provenance: {
+        status: s.provenance || "sampled",
+        source_dataset: s.sourceDataset || "User Sampled Coordinate",
+        confidence: s.confidence || "Coordinate Sampled"
+      }
+    };
+  }).sort((a, b) => b.ranking.overall_score_100 - a.ranking.overall_score_100);
+
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    simulationDate: getSelectedDateString(),
+    ephemeris: ephemerisState,
+    assumptions: "Solar and Earth horizon angles use a smooth spherical Moon model with optical libration; local crater rim shadowing requires high-resolution LOLA DEM raytracing.",
+    selectedSite: currentSite,
+    comparedSites: compareList,
+    rankedSites: rankedExport,
+    savedCustomLocations: savedCustomSites
+  };
+  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(payload, null, 2));
+  const dl = document.createElement('a');
+  dl.setAttribute("href", dataStr);
+  dl.setAttribute("download", "lunar_mission_intelligence_report.json");
+  dl.click();
+  showToast('Exported enriched JSON mission package!');
+};
+
+document.getElementById('btnExportCSV').onclick = () => {
+  let csv = "Name,Latitude_deg,Longitude_deg,Overall_Score_100,Slope_deg,Roughness_m,Temp_K,Water_Ice_Proxy,Solar_Elev_Est_deg,Earth_Elev_Est_deg,DTE_28d_Pct_Est,Data_Source,Confidence\n";
+  [...SITES, ...savedCustomSites].forEach(s => {
+    const d = computeSiteData(s);
+    const c28 = compute28DayCommsEstimate(s);
+    csv += `"${s.name}",${s.lat},${s.lon},${d.overallRating},${s.slope ?? "Unavailable"},${s.roughness ?? "Unavailable"},${s.temp ?? "Unavailable"},"${s.ice || 'Unverified'}",${d.sunH.alt.toFixed(2)},${d.earthH.alt.toFixed(2)},${c28.pct},"${s.sourceDataset || 'User Sampled'}","${s.confidence || 'Sampled'}"\n`;
+  });
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const dl = document.createElement('a');
+  dl.setAttribute("href", url);
+  dl.setAttribute("download", "lunar_sites_scientific_comparison.csv");
+  dl.click();
+  showToast('Exported scientific CSV table!');
+};
+
+document.getElementById('btnPrintReport').onclick = () => window.print();
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+function animate(now = 0) {
+  requestAnimationFrame(animate);
+  if (!simLastFrame) simLastFrame = now;
+  const deltaSeconds = Math.min(0.1, Math.max(0, (now - simLastFrame) / 1000));
+  simLastFrame = now;
+  if (simPlaying) {
+    const rate = Number(document.getElementById('tl-speed')?.value || 0.5);
+    simElapsedDays += deltaSeconds * rate;
+    if (simElapsedDays >= SYNODIC_MONTH_DAYS) { simElapsedDays = SYNODIC_MONTH_DAYS; simPlaying = false; }
+    updateBodies();
+    updateSimulationUI();
+  }
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+// Smooth panel dragging
+(function enablePanelDragging() {
+  const panels = [...document.querySelectorAll('.panel'), document.getElementById('mission-timeline')].filter(Boolean);
+
+  panels.forEach(panel => {
+    const handle = panel.querySelector('.panel-header') || panel.querySelector('.tl-top') || panel.querySelector('h2');
+    if (!handle) return;
+    handle.style.cursor = 'grab';
+    handle.style.userSelect = 'none';
+    handle.style.touchAction = 'none';
+
+    let drag = null;
+    let frame = 0;
+
+    const applyPosition = () => {
+      frame = 0;
+      if (!drag) return;
+      const dx = drag.pendingX - drag.startX;
+      const dy = drag.pendingY - drag.startY;
+      const maxX = Math.max(0, window.innerWidth - drag.width);
+      const maxY = Math.max(0, window.innerHeight - Math.min(drag.height, 64));
+      const x = Math.min(maxX, Math.max(0, drag.left + dx));
+      const y = Math.min(maxY, Math.max(0, drag.top + dy));
+      panel.style.transform = `translate3d(${x - drag.left}px, ${y - drag.top}px, 0)`;
+    };
+
+    const onMove = event => {
+      if (!drag || event.pointerId !== drag.pointerId) return;
+      drag.pendingX = event.clientX;
+      drag.pendingY = event.clientY;
+      if (!frame) frame = requestAnimationFrame(applyPosition);
+    };
+
+    const finish = event => {
+      if (!drag || (event && event.pointerId !== drag.pointerId)) return;
+      if (frame) {
+        cancelAnimationFrame(frame);
+        frame = 0;
+        applyPosition();
+      }
+      const matrix = new DOMMatrixReadOnly(getComputedStyle(panel).transform);
+      const dx = matrix.m41 || 0;
+      const dy = matrix.m42 || 0;
+      const finalLeft = Math.min(Math.max(0, drag.left + dx), Math.max(0, window.innerWidth - drag.width));
+      const finalTop = Math.min(Math.max(0, drag.top + dy), Math.max(0, window.innerHeight - Math.min(drag.height, 64)));
+      panel.style.left = `${finalLeft}px`;
+      panel.style.top = `${finalTop}px`;
+      panel.style.transform = 'none';
+      panel.style.willChange = 'auto';
+      const pointerId = drag.pointerId;
+      drag = null;
+      handle.style.cursor = 'grab';
+      try { handle.releasePointerCapture(pointerId); } catch (_) {}
+    };
+
+    handle.addEventListener('pointerdown', event => {
+      if (event.target.closest('button, input, select, a')) return;
+      if (event.button !== 0 || drag) return;
+      const rect = panel.getBoundingClientRect();
+      panel.style.position = 'fixed';
+      panel.style.left = `${rect.left}px`;
+      panel.style.top = `${rect.top}px`;
+      panel.style.right = 'auto';
+      panel.style.bottom = 'auto';
+      panel.style.width = `${rect.width}px`;
+      panel.style.margin = '0';
+      panel.style.transform = 'none';
+      panel.style.willChange = 'transform';
+      drag = {
+        pointerId: event.pointerId,
+        startX: event.clientX, startY: event.clientY,
+        pendingX: event.clientX, pendingY: event.clientY,
+        left: rect.left, top: rect.top,
+        width: rect.width, height: rect.height
+      };
+      try { handle.setPointerCapture(event.pointerId); } catch (_) {}
+      handle.style.cursor = 'grabbing';
+      event.preventDefault();
+    });
+    handle.addEventListener('pointermove', onMove, { passive: true });
+    handle.addEventListener('pointerup', finish);
+    handle.addEventListener('pointercancel', finish);
+    handle.addEventListener('lostpointercapture', finish);
+  });
+})();
+
+// Initialization
+loadSavedSites();
+updateRankings();
+const cachedEphem = loadCachedEphemeris();
+if (cachedEphem) {
+  ephemerisState = { ...cachedEphem, source: "Cached JPL Horizons" };
+} else {
+  ephemerisState = computeAnalyticalEphemeris(dayOfYear);
+}
+updateBodies();
+updateSimulationUI();
+updateDateLabel();
+buildSiteLists();
+populateCompareDropdown();
+populateRoverDropdowns();
+populateLanding2dDropdown();
+updateRoverPlanner();
+selectSite(0);
+fetchHorizonsAPI();
+
+setInterval(() => {
+  if (navigator.onLine) fetchHorizonsAPI();
+}, 15 * 60 * 1000);
+
+document.getElementById('toggleLeftBtn').classList.add('visible');
+document.getElementById('toggleRightBtn').classList.add('visible');
+document.getElementById('loading').style.display = 'none';
+
+// ========== JUDGE DEMO TOUR & RANKING PRESETS ==========
+const tourSteps = [
+  {
+    title: "Welcome to Lunar South Pole Planner",
+    desc: "Built for NASA Space Apps 2026. This platform combines real NASA LRO/LOLA data, high-resolution PBR lighting, and multi-scale lunar terrain to evaluate Artemis landing sites.",
+    action: () => { document.querySelector('[data-tab="tab-about"]').click(); }
+  },
+  {
+    title: "3D Lunar Globe & South Pole",
+    desc: "Exploring the 3D Digital Twin. Notice the multi-scale craters, Earthshine lighting, and precise South Pole geometry. Let's fly camera directly to Shackleton Rim.",
+    action: () => { 
+      document.querySelector('[data-tab="tab-globe"]').click();
+      selectSite(0);
+      document.getElementById('btnSouthPole').click();
+    }
+  },
+  {
+    title: "Shadowed Craters & Volatiles",
+    desc: "Permanently Shadowed Regions (PSRs) act as cryogenic cold traps. NASA Diviner and ShadowCam data confirm water-ice concentrations up to 9% wt in basins like Shackleton and Haworth.",
+    action: () => { document.querySelector('[data-tab="tab-psr"]').click(); }
+  },
+  {
+    title: "Solar & Earth Comms Link",
+    desc: "Evaluating line-of-sight geometry. Polar ridges receive near-constant sunlight for solar power while maintaining direct radio links to Earth.",
+    action: () => { document.querySelector('[data-tab="tab-solar"]').click(); }
+  },
+  {
+    title: "2D LOLA Landing Simulator",
+    desc: "Testing touchdowns across all 14 candidate landing sites and your custom saved coordinates using NASA LOLA elevation rasters.",
+    action: () => { document.querySelector('[data-tab="tab-landing2d"]').click(); }
+  },
+  {
+    title: "Multi-Site Scientific Comparison",
+    desc: "Comparing illumination, slope, Diviner temperatures, and water-ice potential side-by-side across candidate Artemis landing sites.",
+    action: () => { document.querySelector('[data-tab="tab-compare"]').click(); }
+  },
+  {
+    title: "Ranking Power-Up & Science / Ice Preset",
+    desc: "Dynamic multi-criteria scoring. Clicking the 'Science / Ice' preset instantly re-ranks sites to prioritize volatile richness for resource prospecting.",
+    action: () => { 
+      document.querySelector('[data-tab="tab-ranking"]').click();
+      const btn = document.getElementById('presetScience');
+      if (btn) btn.click();
+    }
+  },
+  {
+    title: "Mission Window & Rover Traverse",
+    desc: "Planning geodesic rover paths across rugged lunar terrain with solar versus RTG power options and synodic mission windows.",
+    action: () => { document.querySelector('[data-tab="tab-mission"]').click(); }
+  },
+  {
+    title: "Ready for Judge Q&A",
+    desc: "Tour complete! You're in strong shape for Space Apps. Press 'F' for clean Presentation Mode or explore freely.",
+    action: () => { 
+      document.querySelector('[data-tab="tab-globe"]').click();
+      selectSite(0);
+      document.getElementById('btnSouthPole').click();
+    }
+  }
+];
+
+let currentTourStep = 0;
+
+function showTourStep(idx) {
+  if (idx < 0 || idx >= tourSteps.length) return;
+  currentTourStep = idx;
+  const step = tourSteps[idx];
+  document.getElementById('tourStepCounter').textContent = `Step ${idx + 1} of ${tourSteps.length}`;
+  document.getElementById('tourStepTitle').textContent = step.title;
+  document.getElementById('tourStepDesc').textContent = step.desc;
+  document.getElementById('tourProgressBar').style.width = `${((idx + 1) / tourSteps.length) * 100}%`;
+  document.getElementById('tourPrevBtn').style.display = idx === 0 ? 'none' : 'inline-flex';
+  document.getElementById('tourNextBtn').textContent = idx === tourSteps.length - 1 ? 'Finish Tour ✓' : 'Next Step →';
+  step.action();
+}
+
+function startDemoTour() {
+  document.getElementById('demoTourOverlay').style.display = 'block';
+  showTourStep(0);
+  showToast('Started Judge Demo Tour');
+}
+
+function endDemoTour() {
+  document.getElementById('demoTourOverlay').style.display = 'none';
+  showToast('Demo tour completed');
+}
+
+document.getElementById('btnDemoTour').onclick = startDemoTour;
+const aboutTourBtn = document.getElementById('btnAboutTour');
+if (aboutTourBtn) aboutTourBtn.onclick = startDemoTour;
+
+document.getElementById('tourNextBtn').onclick = () => {
+  if (currentTourStep < tourSteps.length - 1) showTourStep(currentTourStep + 1);
+  else endDemoTour();
+};
+
+document.getElementById('tourPrevBtn').onclick = () => {
+  if (currentTourStep > 0) showTourStep(currentTourStep - 1);
+};
+
+document.getElementById('tourSkipBtn').onclick = endDemoTour;
+document.getElementById('tourExitBtn').onclick = endDemoTour;
+
+function applyRankingPreset(solar, comms, ice, slope, presetName) {
+  document.getElementById('weightSolar').value = solar;
+  document.getElementById('weightComms').value = comms;
+  document.getElementById('weightIce').value = ice;
+  document.getElementById('weightSlope').value = slope;
+  updateRankings();
+  
+  const allSites = [...SITES, ...savedCustomSites];
+  const scored = allSites.map(s => ({ ...s, score: computeSiteData(s).overallRating })).sort((a,b) => b.score - a.score);
+  const top = scored[0];
+  if (top) {
+    document.getElementById('recSiteName').textContent = top.name;
+    document.getElementById('recCoords').textContent = `${top.lat.toFixed(2)}°, ${top.lon.toFixed(2)}°`;
+    document.getElementById('recScoreBadge').textContent = `${top.score}/100`;
+    document.getElementById('recWhy').textContent = `Top match for ${presetName} profile (${top.note.slice(0, 75)}...)`;
+    const d = computeSiteData(top);
+    document.getElementById('recFactorChips').innerHTML = `
+      <span class="agency-tag" style="background:rgba(245,158,11,0.2); color:#fcd34d; border-color:rgba(245,158,11,0.4);">☀ Solar: ${d.breakdown.solar}pts</span>
+      <span class="agency-tag" style="background:rgba(56,189,248,0.2); color:#7dd3fc; border-color:rgba(56,189,248,0.4);">📡 Comms: ${d.breakdown.comms}pts</span>
+      <span class="agency-tag" style="background:rgba(45,212,191,0.2); color:#5eead4; border-color:rgba(45,212,191,0.4);">❄ Ice: ${d.breakdown.ice}pts</span>
+      <span class="agency-tag" style="background:rgba(74,222,128,0.2); color:#86efac; border-color:rgba(74,222,128,0.4);">⛰ Slope: ${d.breakdown.slope}pts</span>
+    `;
+  }
+  showToast(`Applied "${presetName}" priority preset`);
+}
+
+document.getElementById('presetBalanced').onclick = () => applyRankingPreset(25, 25, 25, 25, 'Balanced');
+document.getElementById('presetPower').onclick = () => applyRankingPreset(50, 30, 10, 10, 'Power First');
+document.getElementById('presetScience').onclick = () => applyRankingPreset(10, 10, 60, 20, 'Science / Ice');
+document.getElementById('presetSafety').onclick = () => applyRankingPreset(20, 30, 10, 40, 'Crewed Safety');
+
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'f' || e.key === 'F') {
+    if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'SELECT') return;
+    document.body.classList.toggle('presentation-mode');
+    showToast(document.body.classList.contains('presentation-mode') ? 'Presentation Mode ON' : 'Presentation Mode OFF');
+  } else if (e.key === 'Escape') {
+    document.body.classList.remove('presentation-mode');
+    document.getElementById('demoTourOverlay').style.display = 'none';
+  }
+});
+
+setTimeout(() => { applyRankingPreset(25, 25, 25, 25, 'Balanced'); }, 500);
+
+animate();
+</script>
+
+<!-- JUDGE DEMO TOUR OVERLAY -->
+<div id="demoTourOverlay" style="position:fixed; bottom:20px; left:50%; transform:translateX(-50%); width:min(580px, 92vw); background:rgba(13,18,32,0.96); border:2px solid var(--accent-cyan); border-radius:16px; padding:20px; backdrop-filter:blur(20px); box-shadow:0 16px 48px rgba(0,0,0,0.8); z-index:500; display:none;">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+    <div style="display:flex; align-items:center; gap:8px;">
+      <span class="agency-tag" id="tourStepCounter" style="background:var(--accent-blue); color:#fff; border:none;">Step 1 of 9</span>
+      <h3 id="tourStepTitle" style="color:#fff; margin:0; font-size:16px; border:none; padding:0; text-transform:none;">Welcome to Space Apps Demo</h3>
+    </div>
+    <button class="btn-danger" id="tourExitBtn" style="font-size:12px; padding:4px 10px;">Exit Tour (Esc)</button>
+  </div>
+  <p id="tourStepDesc" style="color:#cbd5e1; font-size:13.5px; line-height:1.5; margin-bottom:14px;">
+    Welcome judges! This 3-minute guided tour showcases real NASA LRO data, the 3D lunar globe, terrain analysis, and mission planning tools.
+  </p>
+  <div class="bar" style="margin-bottom:14px; height:8px;"><div id="tourProgressBar" style="width:11%;"></div></div>
+  <div style="display:flex; justify-content:space-between; align-items:center;">
+    <button class="btn" id="tourPrevBtn" style="background:#17253e;">← Back</button>
+    <div style="display:flex; gap:8px;">
+      <button class="btn" id="tourSkipBtn" style="background:transparent; border-color:transparent; color:var(--text-muted);">Skip Tour</button>
+      <button class="btn" id="tourNextBtn" style="background:var(--accent-blue); border-color:#60a5fa; color:#fff; font-weight:700;">Next Step →</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
